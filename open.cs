@@ -48,6 +48,7 @@ class MainForm : Form
 {
     private ComboBox comboBox = new ComboBox();
     private CheckBox checkBox = new CheckBox();
+    private Button button = new Button();
     private ListBox listBox = new ListBox();
     private Dictionary<string, string> lookaheadFiles = new Dictionary<string, string>();
     
@@ -80,6 +81,14 @@ class MainForm : Form
         checkBox.Checked = true;
         checkBox.Anchor = AnchorStyles.Top | AnchorStyles.Left;
         this.Controls.Add(checkBox);
+        
+        // ボタン
+        button.Click += ClickButton;
+        button.Text = "先読み";
+        button.Location = new Point(140, 35);
+        button.Size = new Size(55, 20);
+        button.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        this.Controls.Add(button);
         
         // リストボックス
         listBox.DoubleClick += DoubleClickListBox;
@@ -293,6 +302,11 @@ class MainForm : Form
         this.TopMost = checkBox.Checked;
     }
     
+    private void ClickButton(object sender, EventArgs e)
+    {
+        SetLookaheadFiles();
+    }
+    
     private void DoubleClickListBox(object sender, EventArgs e)
     {
         OpenFiles();
@@ -401,9 +415,17 @@ class MainForm : Form
         checkBox.Checked = topmost;
         
         var lookahead = false;
+        button.Visible = false;
         foreach(var item in config.Elements("lookahead"))
         {
-            Boolean.TryParse(item.Value, out lookahead);
+            if(item.Value.ToLower() == "button")
+            {
+                button.Visible = true;
+            }
+            else
+            {
+                Boolean.TryParse(item.Value, out lookahead);
+            }
             break;
         }
         if(lookahead) SetLookaheadFiles();
@@ -412,10 +434,12 @@ class MainForm : Form
     private async void SetLookaheadFiles()
     {
         comboBox.Enabled = false;
+        button.Enabled = false;
         await Task.Run(() =>
         {
             lookaheadFiles = GetEnumerateFiles(string.Empty);
         });
+        button.Enabled = true;
         comboBox.Enabled = true;
         comboBox.Focus();
     }
