@@ -48,9 +48,9 @@ class MainForm : Form
 {
     private ComboBox comboBox = new ComboBox();
     private CheckBox checkBox = new CheckBox();
-    private Button button = new Button();
     private ListBox listBox = new ListBox();
-    private Dictionary<string, string> lookaheadFiles = new Dictionary<string, string>();
+    private Dictionary<string, List<string>> lookaheadFiles = new Dictionary<string, List<string>>();
+    private bool autoTrim = false;
     
     public MainForm()
     {
@@ -82,19 +82,12 @@ class MainForm : Form
         checkBox.Anchor = AnchorStyles.Top | AnchorStyles.Left;
         this.Controls.Add(checkBox);
         
-        // ボタン
-        button.Click += ClickButton;
-        button.Text = "先読み";
-        button.Location = new Point(140, 35);
-        button.Size = new Size(55, 20);
-        button.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        this.Controls.Add(button);
-        
         // リストボックス
         listBox.DoubleClick += DoubleClickListBox;
         listBox.KeyDown += KeyDownListBox;
         listBox.KeyPress += KeyPressListBox;
         listBox.Leave += LeaveListBox;
+        listBox.MouseDown += MouseDownListBox;
         listBox.Location = new Point(10, 60);
         listBox.Size = new Size(185, 52);
         listBox.MultiColumn = false;
@@ -138,6 +131,7 @@ class MainForm : Form
         if(e.KeyCode == Keys.Enter)
         {
             comboBox.Text = comboBox.Text.Replace(@"/", "").Replace(@"\", "");
+            if(autoTrim) comboBox.Text = comboBox.Text.Trim();
             if(!String.IsNullOrWhiteSpace(comboBox.Text))
             {
                 await EnterComboBox();
@@ -152,7 +146,7 @@ class MainForm : Form
         
         await Task.Run(() =>
         {
-            var items = new Dictionary<string, string>();
+            var items = new Dictionary<string, List<string>>();
             if(lookaheadFiles.Count > 0)
             {
                 items = GetLookaheadFiles(comboBox.Text);
@@ -192,9 +186,9 @@ class MainForm : Form
         }
     }
     
-    private Dictionary<string, string> GetEnumerateFiles(string keyword)
+    private Dictionary<string, List<string>> GetEnumerateFiles(string keyword)
     {
-        var items = new Dictionary<string, string>();
+        var items = new Dictionary<string, List<string>>();
         var config = LoadXmlFile("config.xml").Element("config");
         var extensions = new List<string>();
         foreach(var extension in config.Elements("extension"))
@@ -211,8 +205,9 @@ class MainForm : Form
                 var name = Path.GetFileName(file);
                 if(!items.ContainsKey(name))
                 {
-                    items[name] = file;
+                    items[name] = new List<string>();
                 }
+                items[name].Add(file);
             }
         }
         return items;
@@ -302,11 +297,6 @@ class MainForm : Form
         this.TopMost = checkBox.Checked;
     }
     
-    private void ClickButton(object sender, EventArgs e)
-    {
-        SetLookaheadFiles();
-    }
-    
     private void DoubleClickListBox(object sender, EventArgs e)
     {
         OpenFiles();
@@ -333,44 +323,107 @@ class MainForm : Form
         listBox.Update();
     }
     
-    private void OpenFiles()
+    private void MouseDownListBox(object sender, MouseEventArgs e)
     {
+        if(e.Button == MouseButtons.Right)
+        {
+            listBox.ContextMenuStrip = new ContextMenuStrip();
+            int index = listBox.IndexFromPoint(e.Location);
+            if(index >= 0)
+            {
+                listBox.SelectedIndex = index;
+                for(int i = 0; i < listBox.Items.Count; i++)
+                {
+                    if(index != i && listBox.GetSelected(i)) listBox.SetSelected(i, false);
+                }
+                listBox.ContextMenuStrip = SetListBoxMenu();
+            }
+        }
+    }
+    
+    private ContextMenuStrip SetListBoxMenu()
+    {
+        ContextMenuStrip menu = new ContextMenuStrip();
         foreach(var item in listBox.SelectedItems)
         {
-            var file = (KeyValuePair<string, string>)item;
-            if(File.Exists(file.Value))
+            var file = (KeyValuePair<string, List<string>>)item;
+            if(file.Value.Count <= 50)
             {
-                var config = LoadXmlFile("config.xml").Element("config");
-                var app = string.Empty;
-                foreach(var editor in config.Elements("editor"))
+                foreach(var path in file.Value)
                 {
-                    var target = editor.Attribute("target") == null ? string.Empty : editor.Attribute("target").Value;
-                    if(String.IsNullOrWhiteSpace(target))
-                    {
-                        app = String.IsNullOrWhiteSpace(app) ? editor.Value : app;
-                    }
-                    else
-                    {
-                        if(file.Value.EndsWith("." + target, true, null))
-                        {
-                            app = editor.Value;
-                            break;
-                        }
-                    }
-                }
-                if(String.IsNullOrWhiteSpace(app))
-                {
-                    MessageBox.Show("ファイル \"" + file.Key + "\" を起動するアプリケーションが指定されていません。", this.Text);
-                }
-                else
-                {
-                    Process.Start(app, file.Value);
+                    ToolStripMenuItem menuItem = new ToolStripMenuItem();
+                    menuItem.Text = path;
+                    menuItem.Enabled = true;
+                    menuItem.Click += MenuClickListBox;
+                    menu.Items.Add(menuItem);
                 }
             }
             else
             {
-                MessageBox.Show("ファイル \"" + file.Key + "\" が見つかりません。", this.Text);
+                ToolStripMenuItem menuItem = new ToolStripMenuItem();
+                menuItem.Text = "ファイル数が50個を超えています。";
+                menuItem.Enabled = false;
+                menu.Items.Add(menuItem);
             }
+            break;
+        }
+        return menu;
+    }
+    
+    private void MenuClickListBox(object sender, EventArgs e)
+    {
+        ToolStripMenuItem menuItem = (ToolStripMenuItem)sender;
+        foreach(var item in listBox.SelectedItems)
+        {
+            var file = (KeyValuePair<string, List<string>>)item;
+            OpenFile(file.Key, menuItem.Text);
+            break;
+        }
+    }
+    
+    private void OpenFiles()
+    {
+        foreach(var item in listBox.SelectedItems)
+        {
+            var file = (KeyValuePair<string, List<string>>)item;
+            OpenFile(file.Key, file.Value.First());
+        }
+    }
+    
+    private void OpenFile(string name, string path)
+    {
+        if(File.Exists(path))
+        {
+            var config = LoadXmlFile("config.xml").Element("config");
+            var app = string.Empty;
+            foreach(var editor in config.Elements("editor"))
+            {
+                var target = editor.Attribute("target") == null ? string.Empty : editor.Attribute("target").Value;
+                if(String.IsNullOrWhiteSpace(target))
+                {
+                    app = String.IsNullOrWhiteSpace(app) ? editor.Value : app;
+                }
+                else
+                {
+                    if(path.EndsWith("." + target, true, null))
+                    {
+                        app = editor.Value;
+                        break;
+                    }
+                }
+            }
+            if(String.IsNullOrWhiteSpace(app))
+            {
+                MessageBox.Show("ファイル \"" + name + "\" を起動するアプリケーションが指定されていません。", this.Text);
+            }
+            else
+            {
+                Process.Start(app, path);
+            }
+        }
+        else
+        {
+            MessageBox.Show("ファイル \"" + name + "\" が見つかりません。", this.Text);
         }
     }
     
@@ -415,38 +468,36 @@ class MainForm : Form
         checkBox.Checked = topmost;
         
         var lookahead = false;
-        button.Visible = false;
         foreach(var item in config.Elements("lookahead"))
         {
-            if(item.Value.ToLower() == "button")
-            {
-                button.Visible = true;
-            }
-            else
-            {
-                Boolean.TryParse(item.Value, out lookahead);
-            }
+            Boolean.TryParse(item.Value, out lookahead);
             break;
         }
         if(lookahead) SetLookaheadFiles();
+        
+        var trim = false;
+        foreach(var item in config.Elements("trim"))
+        {
+            Boolean.TryParse(item.Value, out trim);
+            break;
+        }
+        autoTrim = trim;
     }
     
     private async void SetLookaheadFiles()
     {
         comboBox.Enabled = false;
-        button.Enabled = false;
         await Task.Run(() =>
         {
             lookaheadFiles = GetEnumerateFiles(string.Empty);
         });
-        button.Enabled = true;
         comboBox.Enabled = true;
         comboBox.Focus();
     }
     
-    private Dictionary<string, string> GetLookaheadFiles(string keyword)
+    private Dictionary<string, List<string>> GetLookaheadFiles(string keyword)
     {
-        var items = new Dictionary<string, string>();
+        var items = new Dictionary<string, List<string>>();
         foreach(var file in lookaheadFiles)
         {
             if(IsWildcardMatch(file.Key, keyword + "*"))
@@ -485,7 +536,8 @@ class MainForm : Form
                     new XElement("path", Environment.GetFolderPath(Environment.SpecialFolder.Personal)),
                     new XElement("editor", @"C:\Windows\notepad.exe"),
                     new XElement("extension", "txt"),
-                    new XElement("lookahead", "False")
+                    new XElement("lookahead", "False"),
+                    new XElement("trim", "False")
                 )
             );
             xml.Save(file);
