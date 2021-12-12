@@ -38,7 +38,7 @@ class Program
         }
         catch(Exception e)
         {
-            MessageBox.Show(e.Message, e.Source);
+            MessageBox.Show(e.Message, e.Source, MessageBoxButtons.OK, MessageBoxIcon.Error);
             Application.Exit();
         }
     }
@@ -344,28 +344,25 @@ class MainForm : Form
     private ContextMenuStrip SetListBoxMenu()
     {
         ContextMenuStrip menu = new ContextMenuStrip();
-        foreach(var item in listBox.SelectedItems)
+        var item = listBox.SelectedItem;
+        var file = (KeyValuePair<string, List<string>>)item;
+        if(file.Value.Count <= 50)
         {
-            var file = (KeyValuePair<string, List<string>>)item;
-            if(file.Value.Count <= 50)
-            {
-                foreach(var path in file.Value)
-                {
-                    ToolStripMenuItem menuItem = new ToolStripMenuItem();
-                    menuItem.Text = path;
-                    menuItem.Enabled = true;
-                    menuItem.Click += MenuClickListBox;
-                    menu.Items.Add(menuItem);
-                }
-            }
-            else
+            foreach(var path in file.Value)
             {
                 ToolStripMenuItem menuItem = new ToolStripMenuItem();
-                menuItem.Text = "ファイル数が50個を超えています。";
-                menuItem.Enabled = false;
+                menuItem.Text = path;
+                menuItem.Enabled = true;
+                menuItem.Click += MenuClickListBox;
                 menu.Items.Add(menuItem);
             }
-            break;
+        }
+        else
+        {
+            ToolStripMenuItem menuItem = new ToolStripMenuItem();
+            menuItem.Text = "ファイル数が50個を超えています。";
+            menuItem.Enabled = false;
+            menu.Items.Add(menuItem);
         }
         return menu;
     }
@@ -373,12 +370,7 @@ class MainForm : Form
     private void MenuClickListBox(object sender, EventArgs e)
     {
         ToolStripMenuItem menuItem = (ToolStripMenuItem)sender;
-        foreach(var item in listBox.SelectedItems)
-        {
-            var file = (KeyValuePair<string, List<string>>)item;
-            OpenFile(file.Key, menuItem.Text);
-            break;
-        }
+        OpenFile(menuItem.Text);
     }
     
     private void OpenFiles()
@@ -386,11 +378,11 @@ class MainForm : Form
         foreach(var item in listBox.SelectedItems)
         {
             var file = (KeyValuePair<string, List<string>>)item;
-            OpenFile(file.Key, file.Value.First());
+            OpenFile(file.Value.First());
         }
     }
     
-    private void OpenFile(string name, string path)
+    private void OpenFile(string path)
     {
         if(File.Exists(path))
         {
@@ -414,7 +406,7 @@ class MainForm : Form
             }
             if(String.IsNullOrWhiteSpace(app))
             {
-                MessageBox.Show("ファイル \"" + name + "\" を起動するアプリケーションが指定されていません。", this.Text);
+                Process.Start(path);
             }
             else
             {
@@ -423,7 +415,7 @@ class MainForm : Form
         }
         else
         {
-            MessageBox.Show("ファイル \"" + name + "\" が見つかりません。", this.Text);
+            MessageBox.Show("ファイル \"" + path + "\" が見つかりません。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
     
