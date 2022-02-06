@@ -27,19 +27,32 @@ class Program
     [STAThread]
     static void Main()
     {
+        bool createdNew;
+        var mutex = new Mutex(true, @"Global\OPEN_COPYRIGHT_2020_M-OWADA", out createdNew);
         try
         {
+            if(!createdNew)
+            {
+                MessageBox.Show("複数起動はできません。");
+                return;
+            }
             Application.EnableVisualStyles();
             Application.ThreadException += (object sender, ThreadExceptionEventArgs e) =>
             {
                 throw new Exception(e.Exception.Message);
             };
-            Application.Run(new MainForm());
+            var mainForm = new MainForm();
+            Application.Run();
         }
         catch(Exception e)
         {
             MessageBox.Show(e.Message, e.Source, MessageBoxButtons.OK, MessageBoxIcon.Error);
             Application.Exit();
+        }
+        finally
+        {
+            mutex.ReleaseMutex();
+            mutex.Close();
         }
     }
 }
@@ -49,7 +62,11 @@ class MainForm : Form
     private ComboBox comboBox = new ComboBox();
     private CheckBox checkBox = new CheckBox();
     private ListBox listBox = new ListBox();
+    private NotifyIcon notifyIcon = new NotifyIcon();
     private Dictionary<string, List<string>> lookaheadFiles = new Dictionary<string, List<string>>();
+    private int historyCount = 0;
+    private bool lookahead = false;
+    private bool taskTray = false;
     private bool autoTrim = false;
     
     public MainForm()
@@ -96,7 +113,31 @@ class MainForm : Form
         listBox.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         this.Controls.Add(listBox);
         
+        // 設定ファイル
         LoadConfigSetting();
+        
+        if(taskTray)
+        {
+            // メニュー
+            var menu = new ContextMenuStrip();
+            menu.Items.Add(SetMenuItem("&起動", ClickMenuOpen));
+            if(lookahead)
+            {
+                menu.Items.Add(SetMenuItem("&再読込", ClickMenuReload));
+            }
+            menu.Items.Add(SetMenuItem("&終了", ClickMenuClose));
+            
+            // タスクトレイ
+            notifyIcon.Icon = SystemIcons.Application;
+            notifyIcon.Visible = true;
+            notifyIcon.Text = this.Text;
+            notifyIcon.ContextMenuStrip = menu;
+            notifyIcon.DoubleClick += DoubleClickIcon;
+        }
+        else
+        {
+            this.Show();
+        }
     }
     
     private void OnFormClosing(object sender, FormClosingEventArgs e)
@@ -111,6 +152,18 @@ class MainForm : Form
             SetElementValue(config, "height", this.Height.ToString());
             SetElementValue(config, "topmost", checkBox.Checked.ToString());
             xml.Save("config.xml");
+        }
+        if(taskTray)
+        {
+            if(e.CloseReason != CloseReason.ApplicationExitCall)
+            {
+                e.Cancel = true;
+                this.Hide();
+            }
+        }
+        else
+        {
+            Application.Exit();
         }
     }
     
@@ -257,7 +310,7 @@ class MainForm : Form
                 history.Remove();
             }
         }
-        if(config.Elements("history").Count() >= 10)
+        for(var i = config.Elements("history").Count(); i >= historyCount; i--)
         {
             config.Elements("history").First().Remove();
         }
@@ -419,6 +472,51 @@ class MainForm : Form
         }
     }
     
+    private ToolStripMenuItem SetMenuItem(string text, EventHandler handler)
+    {
+        var menuItem = new ToolStripMenuItem();
+        menuItem.Text = text;
+        menuItem.Click += handler;
+        return menuItem;
+    }
+    
+    private void ClickMenuOpen(object sender, EventArgs e)
+    {
+        OpenForm();
+    }
+    
+    private void ClickMenuReload(object sender, EventArgs e)
+    {
+        OpenForm();
+        lookaheadFiles = null;
+        GC.Collect();
+        SetLookaheadFiles();
+    }
+    
+    private void ClickMenuClose(object sender, EventArgs e)
+    {
+        if(MessageBox.Show("終了しますか？", this.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+        {
+            notifyIcon.Dispose();
+            Application.Exit();
+        }
+    }
+    
+    private void DoubleClickIcon(object sender, EventArgs e)
+    {
+        OpenForm();
+    }
+    
+    private void OpenForm()
+    {
+        this.Show();
+        if(this.WindowState == FormWindowState.Minimized)
+        {
+            this.WindowState = FormWindowState.Normal;
+        }
+        this.Activate();
+    }
+    
     private void LoadConfigSetting()
     {
         var config = LoadXmlFile("config.xml").Element("config");
@@ -459,7 +557,16 @@ class MainForm : Form
         }
         checkBox.Checked = topmost;
         
-        var lookahead = false;
+        historyCount = 10;
+        foreach(var item in config.Elements("count"))
+        {
+            Int32.TryParse(item.Value, out historyCount);
+            break;
+        }
+        if(historyCount < 1) historyCount = 10;
+        if(historyCount > 50) historyCount = 50;
+        
+        lookahead = false;
         foreach(var item in config.Elements("lookahead"))
         {
             Boolean.TryParse(item.Value, out lookahead);
@@ -467,13 +574,19 @@ class MainForm : Form
         }
         if(lookahead) SetLookaheadFiles();
         
-        var trim = false;
-        foreach(var item in config.Elements("trim"))
+        taskTray = false;
+        foreach(var item in config.Elements("tasktray"))
         {
-            Boolean.TryParse(item.Value, out trim);
+            Boolean.TryParse(item.Value, out taskTray);
             break;
         }
-        autoTrim = trim;
+        
+        autoTrim = false;
+        foreach(var item in config.Elements("trim"))
+        {
+            Boolean.TryParse(item.Value, out autoTrim);
+            break;
+        }
     }
     
     private async void SetLookaheadFiles()
@@ -528,7 +641,9 @@ class MainForm : Form
                     new XElement("path", Environment.GetFolderPath(Environment.SpecialFolder.Personal)),
                     new XElement("editor", @"C:\Windows\notepad.exe"),
                     new XElement("extension", "txt"),
+                    new XElement("count", "10"),
                     new XElement("lookahead", "False"),
+                    new XElement("tasktray", "False"),
                     new XElement("trim", "False")
                 )
             );
