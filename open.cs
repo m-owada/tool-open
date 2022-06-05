@@ -243,14 +243,14 @@ class MainForm : Form
         var items = new Dictionary<string, List<string>>();
         var config = new Config();
         var extensions = new List<string>();
-        foreach(var editor in config.Editor)
+        foreach(var editor in config.Editor.Where(e => !e.Disable).ToList())
         {
             if(!String.IsNullOrWhiteSpace(editor.Attribute))
             {
                 extensions.Add(editor.Attribute);
             }
         }
-        foreach(var path in config.Path)
+        foreach(var path in config.Path.Where(c => !c.Disable).ToList())
         {
             if(Directory.Exists(path.Value))
             {
@@ -483,7 +483,7 @@ class MainForm : Form
         {
             var found = false;
             var config = new Config();
-            foreach(var editor in config.Editor)
+            foreach(var editor in config.Editor.Where(e => !e.Disable).ToList())
             {
                 if(path.EndsWith("." + editor.Attribute, true, null))
                 {
@@ -616,6 +616,7 @@ class SubForm : Form
         this.MinimizeBox = true;
         this.StartPosition = FormStartPosition.CenterScreen;
         this.FormBorderStyle = FormBorderStyle.FixedDialog;
+        this.Load += FormLoad;
         
         // グループボックス1
         var groupBox1 = new GroupBox();
@@ -646,41 +647,54 @@ class SubForm : Form
         
         // テキストボックス（Path）
         textBoxPath.Location = new Point(55, 200);
-        textBoxPath.Size = new Size(475, 20);
+        textBoxPath.Size = new Size(430, 20);
         textBoxPath.Text = string.Empty;
         groupBox1.Controls.Add(textBoxPath);
         
         // 参照ボタン1
         var buttonRef1 = new Button();
-        buttonRef1.Location = new Point(540, 200);
+        buttonRef1.Location = new Point(495, 200);
         buttonRef1.Size = new Size(40, 20);
         buttonRef1.Text = "参照";
         buttonRef1.Click += ClickButtonRef1;
+        CleateToolTip(buttonRef1, "検索フォルダの選択ダイアログを表示します。");
         groupBox1.Controls.Add(buttonRef1);
         
         // 追加ボタン1
         var buttonAdd1 = new Button();
-        buttonAdd1.Location = new Point(585, 200);
+        buttonAdd1.Location = new Point(540, 200);
         buttonAdd1.Size = new Size(40, 20);
         buttonAdd1.Text = "追加";
         buttonAdd1.Click += ClickButtonAdd1;
+        CleateToolTip(buttonAdd1, "入力した情報を一覧に追加します。");
         groupBox1.Controls.Add(buttonAdd1);
         
         // 更新ボタン1
         var buttonMod1 = new Button();
-        buttonMod1.Location = new Point(630, 200);
+        buttonMod1.Location = new Point(585, 200);
         buttonMod1.Size = new Size(40, 20);
         buttonMod1.Text = "更新";
         buttonMod1.Click += ClickButtonMod1;
+        CleateToolTip(buttonMod1, "一覧の選択行を入力した情報で更新します。");
         groupBox1.Controls.Add(buttonMod1);
         
         // 削除ボタン1
         var buttonDel1 = new Button();
-        buttonDel1.Location = new Point(675, 200);
+        buttonDel1.Location = new Point(630, 200);
         buttonDel1.Size = new Size(40, 20);
         buttonDel1.Text = "削除";
         buttonDel1.Click += ClickButtonDel1;
+        CleateToolTip(buttonDel1, "一覧の選択行を削除します。");
         groupBox1.Controls.Add(buttonDel1);
+        
+        // 無効ボタン1
+        var buttonDis1 = new Button();
+        buttonDis1.Location = new Point(675, 200);
+        buttonDis1.Size = new Size(40, 20);
+        buttonDis1.Text = "無効";
+        buttonDis1.Click += ClickButtonDis1;
+        CleateToolTip(buttonDis1, "一覧の選択行を無効にします。既に無効の場合は有効にします。");
+        groupBox1.Controls.Add(buttonDis1);
         
         // ↑ボタン1
         var buttonUp1 = new Button();
@@ -688,6 +702,7 @@ class SubForm : Form
         buttonUp1.Size = new Size(20, 20);
         buttonUp1.Text = "↑";
         buttonUp1.Click += ClickButtonUp1;
+        CleateToolTip(buttonUp1, "一覧の選択行を上に移動します。");
         groupBox1.Controls.Add(buttonUp1);
         
         // ↓ボタン1
@@ -696,6 +711,7 @@ class SubForm : Form
         buttonDown1.Size = new Size(20, 20);
         buttonDown1.Text = "↓";
         buttonDown1.Click += ClickButtonDown1;
+        CleateToolTip(buttonDown1, "一覧の選択行を下に移動します。");
         groupBox1.Controls.Add(buttonDown1);
         
         // グループボックス2
@@ -736,41 +752,54 @@ class SubForm : Form
         
         // テキストボックス（Editor）
         textBoxEditor.Location = new Point(170, 200);
-        textBoxEditor.Size = new Size(360, 20);
+        textBoxEditor.Size = new Size(315, 20);
         textBoxEditor.Text = string.Empty;
         groupBox2.Controls.Add(textBoxEditor);
         
         // 参照ボタン2
         var buttonRef2 = new Button();
-        buttonRef2.Location = new Point(540, 200);
+        buttonRef2.Location = new Point(495, 200);
         buttonRef2.Size = new Size(40, 20);
         buttonRef2.Text = "参照";
         buttonRef2.Click += ClickButtonRef2;
+        CleateToolTip(buttonRef2, "使用するエディタの選択ダイアログを表示します。");
         groupBox2.Controls.Add(buttonRef2);
         
         // 追加ボタン2
         var buttonAdd2 = new Button();
-        buttonAdd2.Location = new Point(585, 200);
+        buttonAdd2.Location = new Point(540, 200);
         buttonAdd2.Size = new Size(40, 20);
         buttonAdd2.Text = "追加";
         buttonAdd2.Click += ClickButtonAdd2;
+        CleateToolTip(buttonAdd2, "入力した情報を一覧に追加します。");
         groupBox2.Controls.Add(buttonAdd2);
         
         // 更新ボタン2
         var buttonMod2 = new Button();
-        buttonMod2.Location = new Point(630, 200);
+        buttonMod2.Location = new Point(585, 200);
         buttonMod2.Size = new Size(40, 20);
         buttonMod2.Text = "更新";
         buttonMod2.Click += ClickButtonMod2;
+        CleateToolTip(buttonMod2, "一覧の選択行を入力した情報で更新します。");
         groupBox2.Controls.Add(buttonMod2);
         
         // 削除ボタン2
         var buttonDel2 = new Button();
-        buttonDel2.Location = new Point(675, 200);
+        buttonDel2.Location = new Point(630, 200);
         buttonDel2.Size = new Size(40, 20);
         buttonDel2.Text = "削除";
         buttonDel2.Click += ClickButtonDel2;
+        CleateToolTip(buttonDel2, "一覧の選択行を削除します。");
         groupBox2.Controls.Add(buttonDel2);
+        
+        // 無効ボタン2
+        var buttonDis2 = new Button();
+        buttonDis2.Location = new Point(675, 200);
+        buttonDis2.Size = new Size(40, 20);
+        buttonDis2.Text = "無効";
+        buttonDis2.Click += ClickButtonDis2;
+        CleateToolTip(buttonDis2, "一覧の選択行を無効にします。既に無効の場合は有効にします。");
+        groupBox2.Controls.Add(buttonDis2);
         
         // ↑ボタン2
         var buttonUp2 = new Button();
@@ -778,6 +807,7 @@ class SubForm : Form
         buttonUp2.Size = new Size(20, 20);
         buttonUp2.Text = "↑";
         buttonUp2.Click += ClickButtonUp2;
+        CleateToolTip(buttonUp2, "一覧の選択行を上に移動します。");
         groupBox2.Controls.Add(buttonUp2);
         
         // ↓ボタン2
@@ -786,6 +816,7 @@ class SubForm : Form
         buttonDown2.Size = new Size(20, 20);
         buttonDown2.Text = "↓";
         buttonDown2.Click += ClickButtonDown2;
+        CleateToolTip(buttonDown2, "一覧の選択行を下に移動します。");
         groupBox2.Controls.Add(buttonDown2);
         
         // グループボックス3
@@ -833,6 +864,7 @@ class SubForm : Form
         buttonSave.Size = new Size(60, 30);
         buttonSave.Text = "保存";
         buttonSave.Click += ClickButtonSave;
+        CleateToolTip(buttonSave, "設定を保存して終了します。");
         this.Controls.Add(buttonSave);
         
         // 中止ボタン
@@ -841,6 +873,7 @@ class SubForm : Form
         buttonCancel.Size = new Size(60, 30);
         buttonCancel.Text = "中止";
         buttonCancel.Click += ClickButtonCancel;
+        CleateToolTip(buttonCancel, "設定を保存しないで終了します。");
         this.Controls.Add(buttonCancel);
         
         // データ読込
@@ -852,6 +885,9 @@ class SubForm : Form
     {
         [DisplayName("フォルダ")]
         public string Path { get; set; }
+        
+        [Browsable(false)]
+        public bool Disable { get; set; }
     }
     
     private class Columns2
@@ -861,6 +897,9 @@ class SubForm : Form
         
         [DisplayName("エディタ")]
         public string Editor { get; set; }
+        
+        [Browsable(false)]
+        public bool Disable { get; set; }
     }
     
     private Label CreateLabel(int x, int y, string text)
@@ -871,6 +910,47 @@ class SubForm : Form
         label.Size = new Size(label.PreferredWidth, 20);
         label.TextAlign = ContentAlignment.MiddleLeft;
         return label;
+    }
+    
+    private void CleateToolTip(Control control, string text)
+    {
+        var toolTip = new ToolTip();
+        toolTip.SetToolTip(control, text);
+    }
+    
+    private void FormLoad(object sender, EventArgs e)
+    {
+        foreach(DataGridViewRow row in dataGridView1.Rows)
+        {
+            SetStrikeoutDataGridView1(row.Index);
+        }
+        foreach(DataGridViewRow row in dataGridView2.Rows)
+        {
+            SetStrikeoutDataGridView2(row.Index);
+        }
+    }
+    
+    private void SetStrikeoutDataGridView1(int index)
+    {
+        SetFontStyleStrikeout(dataGridView1, index, dataSource1[index].Disable);
+    }
+    
+    private void SetStrikeoutDataGridView2(int index)
+    {
+        SetFontStyleStrikeout(dataGridView2, index, dataSource2[index].Disable);
+    }
+    
+    private void SetFontStyleStrikeout(DataGridView dataGridView, int index, bool disable)
+    {
+        var style = FontStyle.Regular;
+        if(disable)
+        {
+            style = FontStyle.Strikeout;
+        }
+        foreach(DataGridViewCell cell in dataGridView.Rows[index].Cells)
+        {
+            cell.Style.Font = new Font(dataGridView.DefaultCellStyle.Font, style);
+        }
     }
     
     private void CellPaintingDataGridView1(object sender, DataGridViewCellPaintingEventArgs e)
@@ -938,9 +1018,25 @@ class SubForm : Form
         }
     }
     
+    private bool CheckDataGridView1()
+    {
+        if(String.IsNullOrWhiteSpace(textBoxPath.Text))
+        {
+            MessageBox.Show("検索フォルダを入力してください。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            textBoxPath.Focus();
+            return false;
+        }
+        if(dataSource1.Count >= 100)
+        {
+            MessageBox.Show("指定できる件数の上限を超過しました。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return false;
+        }
+        return true;
+    }
+    
     private void ClickButtonAdd1(object sender, EventArgs e)
     {
-        if(dataSource1.Count < 100 && !String.IsNullOrWhiteSpace(textBoxPath.Text))
+        if(CheckDataGridView1())
         {
             var row = new Columns1();
             row.Path = textBoxPath.Text;
@@ -953,7 +1049,7 @@ class SubForm : Form
     
     private void ClickButtonMod1(object sender, EventArgs e)
     {
-        if(dataGridView1.CurrentCell != null && !String.IsNullOrWhiteSpace(textBoxPath.Text))
+        if(dataGridView1.CurrentCell != null && CheckDataGridView1())
         {
             var row = dataSource1[dataGridView1.CurrentCell.RowIndex];
             row.Path = textBoxPath.Text;
@@ -975,6 +1071,16 @@ class SubForm : Form
         }
     }
     
+    private void ClickButtonDis1(object sender, EventArgs e)
+    {
+        if(dataGridView1.CurrentCell != null)
+        {
+            var row = dataSource1[dataGridView1.CurrentCell.RowIndex];
+            row.Disable = !row.Disable;
+            SetStrikeoutDataGridView1(dataGridView1.CurrentCell.RowIndex);
+        }
+    }
+    
     private void ClickButtonUp1(object sender, EventArgs e)
     {
         if(dataGridView1.CurrentCell != null)
@@ -984,6 +1090,8 @@ class SubForm : Form
                 var row = dataSource1[dataGridView1.CurrentCell.RowIndex];
                 dataSource1[dataGridView1.CurrentCell.RowIndex] = dataSource1[dataGridView1.CurrentCell.RowIndex - 1];
                 dataSource1[dataGridView1.CurrentCell.RowIndex - 1] = row;
+                SetStrikeoutDataGridView1(dataGridView1.CurrentCell.RowIndex);
+                SetStrikeoutDataGridView1(dataGridView1.CurrentCell.RowIndex - 1);
                 dataGridView1.CurrentCell = dataGridView1[0, dataGridView1.CurrentCell.RowIndex - 1];
             }
         }
@@ -998,6 +1106,8 @@ class SubForm : Form
                 var row = dataSource1[dataGridView1.CurrentCell.RowIndex];
                 dataSource1[dataGridView1.CurrentCell.RowIndex] = dataSource1[dataGridView1.CurrentCell.RowIndex + 1];
                 dataSource1[dataGridView1.CurrentCell.RowIndex + 1] = row;
+                SetStrikeoutDataGridView1(dataGridView1.CurrentCell.RowIndex);
+                SetStrikeoutDataGridView1(dataGridView1.CurrentCell.RowIndex + 1);
                 dataGridView1.CurrentCell = dataGridView1[0, dataGridView1.CurrentCell.RowIndex + 1];
             }
         }
@@ -1028,9 +1138,25 @@ class SubForm : Form
         }
     }
     
+    private bool CheckDataGridView2()
+    {
+        if(String.IsNullOrWhiteSpace(textBoxExtension.Text))
+        {
+            MessageBox.Show("検索対象のファイルの拡張子を入力してください。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            textBoxExtension.Focus();
+            return false;
+        }
+        if(dataSource2.Count >= 100)
+        {
+            MessageBox.Show("指定できる件数の上限を超過しました。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return false;
+        }
+        return true;
+    }
+    
     private void ClickButtonAdd2(object sender, EventArgs e)
     {
-        if(dataSource2.Count < 100 && !String.IsNullOrWhiteSpace(textBoxExtension.Text))
+        if(CheckDataGridView2())
         {
             var row = new Columns2();
             row.Extension = textBoxExtension.Text;
@@ -1045,7 +1171,7 @@ class SubForm : Form
     
     private void ClickButtonMod2(object sender, EventArgs e)
     {
-        if(dataGridView2.CurrentCell != null && !String.IsNullOrWhiteSpace(textBoxExtension.Text))
+        if(dataGridView2.CurrentCell != null && CheckDataGridView2())
         {
             var row = dataSource2[dataGridView2.CurrentCell.RowIndex];
             row.Extension = textBoxExtension.Text;
@@ -1069,6 +1195,16 @@ class SubForm : Form
         }
     }
     
+    private void ClickButtonDis2(object sender, EventArgs e)
+    {
+        if(dataGridView2.CurrentCell != null)
+        {
+            var row = dataSource2[dataGridView2.CurrentCell.RowIndex];
+            row.Disable = !row.Disable;
+            SetStrikeoutDataGridView2(dataGridView2.CurrentCell.RowIndex);
+        }
+    }
+    
     private void ClickButtonUp2(object sender, EventArgs e)
     {
         if(dataGridView2.CurrentCell != null)
@@ -1078,6 +1214,8 @@ class SubForm : Form
                 var row = dataSource2[dataGridView2.CurrentCell.RowIndex];
                 dataSource2[dataGridView2.CurrentCell.RowIndex] = dataSource2[dataGridView2.CurrentCell.RowIndex - 1];
                 dataSource2[dataGridView2.CurrentCell.RowIndex - 1] = row;
+                SetStrikeoutDataGridView2(dataGridView2.CurrentCell.RowIndex);
+                SetStrikeoutDataGridView2(dataGridView2.CurrentCell.RowIndex - 1);
                 dataGridView2.CurrentCell = dataGridView2[0, dataGridView2.CurrentCell.RowIndex - 1];
             }
         }
@@ -1092,6 +1230,8 @@ class SubForm : Form
                 var row = dataSource2[dataGridView2.CurrentCell.RowIndex];
                 dataSource2[dataGridView2.CurrentCell.RowIndex] = dataSource2[dataGridView2.CurrentCell.RowIndex + 1];
                 dataSource2[dataGridView2.CurrentCell.RowIndex + 1] = row;
+                SetStrikeoutDataGridView2(dataGridView2.CurrentCell.RowIndex);
+                SetStrikeoutDataGridView2(dataGridView2.CurrentCell.RowIndex + 1);
                 dataGridView2.CurrentCell = dataGridView2[0, dataGridView2.CurrentCell.RowIndex + 1];
             }
         }
@@ -1099,7 +1239,16 @@ class SubForm : Form
     
     private void ClickButtonSave(object sender, EventArgs e)
     {
-        if(dataGridView1.RowCount == 0)
+        var disable = true;
+        foreach(var data in dataSource1)
+        {
+            if(!data.Disable)
+            {
+                disable = false;
+                break;
+            }
+        }
+        if(disable)
         {
             MessageBox.Show("検索フォルダを指定してください。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
@@ -1108,12 +1257,12 @@ class SubForm : Form
         config.ClearPath();
         foreach(var data in dataSource1)
         {
-            config.AddPath(data.Path);
+            config.AddPath(data.Path, data.Disable);
         }
         config.ClearEditor();
         foreach(var data in dataSource2)
         {
-            config.AddEditor(data.Extension, data.Editor);
+            config.AddEditor(data.Extension, data.Editor, data.Disable);
         }
         config.TopMost = checkBoxTopMost.Checked;
         config.AutoTrim = checkBoxAutoTrim.Checked;
@@ -1136,6 +1285,7 @@ class SubForm : Form
         {
             var row1 = new Columns1();
             row1.Path = path.Value;
+            row1.Disable = path.Disable;
             dataSource1.Add(row1);
         }
         foreach(var editor in config.Editor)
@@ -1143,6 +1293,7 @@ class SubForm : Form
             var row2 = new Columns2();
             row2.Extension = editor.Attribute;
             row2.Editor = editor.Value;
+            row2.Disable = editor.Disable;
             dataSource2.Add(row2);
         }
         checkBoxTopMost.Checked = config.TopMost;
@@ -1177,10 +1328,12 @@ class Config
     {
         public string Attribute { get; set; }
         public string Value { get; set; }
+        public bool Disable { get; set; }
         public Element()
         {
             Attribute = string.Empty;
             Value = string.Empty;
+            Disable = false;
         }
     }
     
@@ -1234,32 +1387,28 @@ class Config
         History = new List<Element>();
     }
     
-    public void AddPath(string val)
+    public void AddPath(string val, bool disable)
     {
-        Path.Add(ConvertElement(val));
+        Path.Add(ConvertElement(string.Empty, val, disable));
     }
     
-    public void AddEditor(string attribute, string val)
+    public void AddEditor(string attribute, string val, bool disable)
     {
-        Editor.Add(ConvertElement(attribute, val));
+        Editor.Add(ConvertElement(attribute, val, disable));
     }
     
     public void AddHistory(string val)
     {
-        History.Add(ConvertElement(val));
+        History.Add(ConvertElement(string.Empty, val, false));
     }
     
-    private Element ConvertElement(string attribute, string val)
+    private Element ConvertElement(string attribute, string val, bool disable)
     {
         var element = new Element();
         element.Attribute = attribute;
         element.Value = val;
+        element.Disable = disable;
         return element;
-    }
-    
-    private Element ConvertElement(string val)
-    {
-        return ConvertElement(string.Empty, val);
     }
     
     private XDocument GetDocument()
@@ -1330,6 +1479,16 @@ class Config
             {
                 item.Attribute = element.Attribute(attribute).Value;
             }
+            if(element.Attribute("disable") == null)
+            {
+                item.Disable = false;
+            }
+            else
+            {
+                bool disable;
+                Boolean.TryParse(element.Attribute("disable").Value, out disable);
+                item.Disable = disable;
+            }
             items.Add(item);
         }
         return items;
@@ -1373,13 +1532,27 @@ class Config
         }
         foreach(var item in items)
         {
-            if(String.IsNullOrWhiteSpace(attribute))
+            if(item.Disable)
             {
-                node.Add(new XElement(name, item.Value));
+                if(String.IsNullOrWhiteSpace(attribute))
+                {
+                    node.Add(new XElement(name, item.Value, new XAttribute("disable", "True")));
+                }
+                else
+                {
+                    node.Add(new XElement(name, item.Value, new XAttribute(attribute, item.Attribute), new XAttribute("disable", "True")));
+                }
             }
             else
             {
-                node.Add(new XElement(name, item.Value, new XAttribute(attribute, item.Attribute)));
+                if(String.IsNullOrWhiteSpace(attribute))
+                {
+                    node.Add(new XElement(name, item.Value));
+                }
+                else
+                {
+                    node.Add(new XElement(name, item.Value, new XAttribute(attribute, item.Attribute)));
+                }
             }
         }
     }
