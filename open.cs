@@ -618,6 +618,9 @@ class SubForm : Form
         this.FormBorderStyle = FormBorderStyle.FixedDialog;
         this.Load += FormLoad;
         
+        // ツールチップ
+        var toolTip = new ToolTip();
+        
         // グループボックス1
         var groupBox1 = new GroupBox();
         groupBox1.Location = new Point(10, 10);
@@ -657,7 +660,7 @@ class SubForm : Form
         buttonRef1.Size = new Size(40, 20);
         buttonRef1.Text = "参照";
         buttonRef1.Click += ClickButtonRef1;
-        CleateToolTip(buttonRef1, "検索フォルダの選択ダイアログを表示します。");
+        toolTip.SetToolTip(buttonRef1, "検索フォルダの選択ダイアログを表示します。");
         groupBox1.Controls.Add(buttonRef1);
         
         // 追加ボタン1
@@ -666,7 +669,7 @@ class SubForm : Form
         buttonAdd1.Size = new Size(40, 20);
         buttonAdd1.Text = "追加";
         buttonAdd1.Click += ClickButtonAdd1;
-        CleateToolTip(buttonAdd1, "入力した情報を一覧に追加します。");
+        toolTip.SetToolTip(buttonAdd1, "入力した情報を一覧に追加します。");
         groupBox1.Controls.Add(buttonAdd1);
         
         // 更新ボタン1
@@ -675,7 +678,7 @@ class SubForm : Form
         buttonMod1.Size = new Size(40, 20);
         buttonMod1.Text = "更新";
         buttonMod1.Click += ClickButtonMod1;
-        CleateToolTip(buttonMod1, "一覧の選択行を入力した情報で更新します。");
+        toolTip.SetToolTip(buttonMod1, "一覧の選択行を入力した情報で更新します。");
         groupBox1.Controls.Add(buttonMod1);
         
         // 削除ボタン1
@@ -684,7 +687,7 @@ class SubForm : Form
         buttonDel1.Size = new Size(40, 20);
         buttonDel1.Text = "削除";
         buttonDel1.Click += ClickButtonDel1;
-        CleateToolTip(buttonDel1, "一覧の選択行を削除します。");
+        toolTip.SetToolTip(buttonDel1, "一覧の選択行を削除します。");
         groupBox1.Controls.Add(buttonDel1);
         
         // 無効ボタン1
@@ -693,7 +696,7 @@ class SubForm : Form
         buttonDis1.Size = new Size(40, 20);
         buttonDis1.Text = "無効";
         buttonDis1.Click += ClickButtonDis1;
-        CleateToolTip(buttonDis1, "一覧の選択行を無効にします。既に無効の場合は有効にします。");
+        toolTip.SetToolTip(buttonDis1, "一覧の選択行を無効にします。既に無効の場合は有効にします。");
         groupBox1.Controls.Add(buttonDis1);
         
         // ↑ボタン1
@@ -702,7 +705,7 @@ class SubForm : Form
         buttonUp1.Size = new Size(20, 20);
         buttonUp1.Text = "↑";
         buttonUp1.Click += ClickButtonUp1;
-        CleateToolTip(buttonUp1, "一覧の選択行を上に移動します。");
+        toolTip.SetToolTip(buttonUp1, "一覧の選択行を上に移動します。");
         groupBox1.Controls.Add(buttonUp1);
         
         // ↓ボタン1
@@ -711,7 +714,7 @@ class SubForm : Form
         buttonDown1.Size = new Size(20, 20);
         buttonDown1.Text = "↓";
         buttonDown1.Click += ClickButtonDown1;
-        CleateToolTip(buttonDown1, "一覧の選択行を下に移動します。");
+        toolTip.SetToolTip(buttonDown1, "一覧の選択行を下に移動します。");
         groupBox1.Controls.Add(buttonDown1);
         
         // グループボックス2
@@ -762,7 +765,7 @@ class SubForm : Form
         buttonRef2.Size = new Size(40, 20);
         buttonRef2.Text = "参照";
         buttonRef2.Click += ClickButtonRef2;
-        CleateToolTip(buttonRef2, "使用するエディタの選択ダイアログを表示します。");
+        toolTip.SetToolTip(buttonRef2, "使用するエディタの選択ダイアログを表示します。");
         groupBox2.Controls.Add(buttonRef2);
         
         // 追加ボタン2
@@ -771,7 +774,7 @@ class SubForm : Form
         buttonAdd2.Size = new Size(40, 20);
         buttonAdd2.Text = "追加";
         buttonAdd2.Click += ClickButtonAdd2;
-        CleateToolTip(buttonAdd2, "入力した情報を一覧に追加します。");
+        toolTip.SetToolTip(buttonAdd2, "入力した情報を一覧に追加します。");
         groupBox2.Controls.Add(buttonAdd2);
         
         // 更新ボタン2
@@ -780,7 +783,7 @@ class SubForm : Form
         buttonMod2.Size = new Size(40, 20);
         buttonMod2.Text = "更新";
         buttonMod2.Click += ClickButtonMod2;
-        CleateToolTip(buttonMod2, "一覧の選択行を入力した情報で更新します。");
+        toolTip.SetToolTip(buttonMod2, "一覧の選択行を入力した情報で更新します。");
         groupBox2.Controls.Add(buttonMod2);
         
         // 削除ボタン2
@@ -789,7 +792,7 @@ class SubForm : Form
         buttonDel2.Size = new Size(40, 20);
         buttonDel2.Text = "削除";
         buttonDel2.Click += ClickButtonDel2;
-        CleateToolTip(buttonDel2, "一覧の選択行を削除します。");
+        toolTip.SetToolTip(buttonDel2, "一覧の選択行を削除します。");
         groupBox2.Controls.Add(buttonDel2);
         
         // 無効ボタン2
@@ -798,7 +801,7 @@ class SubForm : Form
         buttonDis2.Size = new Size(40, 20);
         buttonDis2.Text = "無効";
         buttonDis2.Click += ClickButtonDis2;
-        CleateToolTip(buttonDis2, "一覧の選択行を無効にします。既に無効の場合は有効にします。");
+        toolTip.SetToolTip(buttonDis2, "一覧の選択行を無効にします。既に無効の場合は有効にします。");
         groupBox2.Controls.Add(buttonDis2);
         
         // ↑ボタン2
@@ -807,7 +810,7 @@ class SubForm : Form
         buttonUp2.Size = new Size(20, 20);
         buttonUp2.Text = "↑";
         buttonUp2.Click += ClickButtonUp2;
-        CleateToolTip(buttonUp2, "一覧の選択行を上に移動します。");
+        toolTip.SetToolTip(buttonUp2, "一覧の選択行を上に移動します。");
         groupBox2.Controls.Add(buttonUp2);
         
         // ↓ボタン2
@@ -816,7 +819,7 @@ class SubForm : Form
         buttonDown2.Size = new Size(20, 20);
         buttonDown2.Text = "↓";
         buttonDown2.Click += ClickButtonDown2;
-        CleateToolTip(buttonDown2, "一覧の選択行を下に移動します。");
+        toolTip.SetToolTip(buttonDown2, "一覧の選択行を下に移動します。");
         groupBox2.Controls.Add(buttonDown2);
         
         // グループボックス3
@@ -864,7 +867,7 @@ class SubForm : Form
         buttonSave.Size = new Size(60, 30);
         buttonSave.Text = "保存";
         buttonSave.Click += ClickButtonSave;
-        CleateToolTip(buttonSave, "設定を保存して終了します。");
+        toolTip.SetToolTip(buttonSave, "設定を保存して終了します。");
         this.Controls.Add(buttonSave);
         
         // 中止ボタン
@@ -873,7 +876,7 @@ class SubForm : Form
         buttonCancel.Size = new Size(60, 30);
         buttonCancel.Text = "中止";
         buttonCancel.Click += ClickButtonCancel;
-        CleateToolTip(buttonCancel, "設定を保存しないで終了します。");
+        toolTip.SetToolTip(buttonCancel, "設定を保存しないで終了します。");
         this.Controls.Add(buttonCancel);
         
         // データ読込
@@ -910,12 +913,6 @@ class SubForm : Form
         label.Size = new Size(label.PreferredWidth, 20);
         label.TextAlign = ContentAlignment.MiddleLeft;
         return label;
-    }
-    
-    private void CleateToolTip(Control control, string text)
-    {
-        var toolTip = new ToolTip();
-        toolTip.SetToolTip(control, text);
     }
     
     private void FormLoad(object sender, EventArgs e)
