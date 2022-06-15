@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
@@ -77,6 +78,7 @@ class MainForm : Form
         this.StartPosition = FormStartPosition.Manual;
         this.FormBorderStyle = FormBorderStyle.Sizable;
         this.FormClosing += OnFormClosing;
+        this.Icon = Icon.ExtractAssociatedIcon(Process.GetCurrentProcess().MainModule.FileName);
         
         // コンボボックス
         comboBox.KeyDown += KeyDownComboBox;
@@ -127,7 +129,7 @@ class MainForm : Form
             menu.Items.Add(SetMenuItem("&終了", ClickMenuClose));
             
             // タスクトレイ
-            notifyIcon.Icon = SystemIcons.Application;
+            notifyIcon.Icon = this.Icon;
             notifyIcon.Visible = true;
             notifyIcon.Text = this.Text;
             notifyIcon.ContextMenuStrip = menu;
@@ -250,7 +252,7 @@ class MainForm : Form
                 extensions.Add(editor.Attribute);
             }
         }
-        foreach(var path in config.Path.Where(c => !c.Disable).ToList())
+        foreach(var path in config.Path.Where(p => !p.Disable).ToList())
         {
             if(Directory.Exists(path.Value))
             {
@@ -402,11 +404,19 @@ class MainForm : Form
         {
             OpenFiles();
         }
+        else if(e.KeyData == (Keys.Control | Keys.C))
+        {
+            CopyFiles();
+        }
     }
     
     private void KeyPressListBox(object sender, KeyPressEventArgs e)
     {
         if(e.KeyChar == (char)Keys.Enter)
+        {
+            e.Handled = true;
+        }
+        else if((Control.ModifierKeys & Keys.Control) == Keys.Control)
         {
             e.Handled = true;
         }
@@ -508,6 +518,20 @@ class MainForm : Form
             MessageBox.Show("ファイル \"" + path + "\" が見つかりません。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         listBox.Enabled = true;
+    }
+    
+    private void CopyFiles()
+    {
+        var files = new StringCollection();
+        foreach(var item in listBox.SelectedItems)
+        {
+            var file = (KeyValuePair<string, List<string>>)item;
+            files.Add(file.Value.First());
+        }
+        if(files.Count > 0)
+        {
+            Clipboard.SetFileDropList(files);
+        }
     }
     
     private ToolStripMenuItem SetMenuItem(string text, EventHandler handler)
