@@ -244,27 +244,92 @@ class MainForm : Form
     {
         var items = new Dictionary<string, List<string>>();
         var config = new Config();
-        var extensions = new List<string>();
-        foreach(var editor in config.Editor.Where(e => !e.Disable).ToList())
+        var paths = new List<string>();
+        foreach(var path in config.Path.Where(p => !p.Disable && Directory.Exists(p.Value)).ToList())
         {
-            if(!String.IsNullOrWhiteSpace(editor.Attribute))
-            {
-                extensions.Add(editor.Attribute);
-            }
+            paths.Add(path.Value);
         }
-        foreach(var path in config.Path.Where(p => !p.Disable).ToList())
+        var extensions = new List<string>();
+        foreach(var editor in config.Editor.Where(e => !e.Disable && !String.IsNullOrWhiteSpace(e.Attribute)).ToList())
         {
-            if(Directory.Exists(path.Value))
+            extensions.Add(editor.Attribute);
+        }
+        if(config.Parallel)
+        {
+            items = ParallelSearch(paths, extensions, keyword);
+        }
+        else
+        {
+            items = SerialSearch(paths, extensions, keyword);
+        }
+        return items;
+    }
+    
+    private Dictionary<string, List<string>> ParallelSearch(List<string> paths, List<string> extensions, string keyword)
+    {
+        var items = new Dictionary<string, List<string>>();
+        var items_all = new Dictionary<int, Dictionary<string, List<string>>>();
+        var lockobj = new object();
+        Parallel.For
+        (
+            0,
+            paths.Count,
+            () => new Dictionary<int, Dictionary<string, List<string>>>(),
+            (i, loopState, items_wk) =>
             {
-                foreach(var file in EnumerateFilesAllDirectories(path.Value, keyword + "*", extensions))
+                items_wk[i] = new Dictionary<string, List<string>>();
+                foreach(var file in EnumerateFilesAllDirectories(paths[i], keyword + "*", extensions))
                 {
                     var name = Path.GetFileName(file);
-                    if(!items.ContainsKey(name))
+                    if(!items_wk[i].ContainsKey(name))
                     {
-                        items[name] = new List<string>();
+                        items_wk[i][name] = new List<string>();
                     }
-                    items[name].Add(file);
+                    items_wk[i][name].Add(file);
                 }
+                return items_wk;
+            },
+            (items_wk) =>
+            {
+                lock(lockobj)
+                {
+                    foreach(var item_wk in items_wk)
+                    {
+                        if(!items_all.ContainsKey(item_wk.Key))
+                        {
+                            items_all[item_wk.Key] = item_wk.Value;
+                        }
+                    }
+                }
+            }
+        );
+        for(var i = 0; i < items_all.Count; i++)
+        {
+            foreach(var item_all in items_all[i])
+            {
+                if(!items.ContainsKey(item_all.Key))
+                {
+                    items[item_all.Key] = new List<string>();
+                }
+                items[item_all.Key].AddRange(item_all.Value);
+            }
+        }
+        return items;
+    }
+    
+    private Dictionary<string, List<string>> SerialSearch(List<string> paths, List<string> extensions, string keyword)
+    {
+        var items = new Dictionary<string, List<string>>();
+        foreach(var path in paths)
+        {
+            foreach(var file in EnumerateFilesAllDirectories(path, keyword + "*", extensions))
+            {
+                var name = Path.GetFileName(file);
+                if(!items.ContainsKey(name))
+                {
+                    items[name] = new List<string>();
+                }
+                items[name].Add(file);
             }
         }
         return items;
@@ -365,7 +430,7 @@ class MainForm : Form
         button.Enabled = false;
         var topmost = this.TopMost;
         this.TopMost = false;
-        SubForm subForm = new SubForm();
+        var subForm = new SubForm();
         subForm.ShowDialog();
         this.TopMost = topmost;
         button.Enabled = true;
@@ -447,14 +512,14 @@ class MainForm : Form
     
     private ContextMenuStrip SetListBoxMenu()
     {
-        ContextMenuStrip menu = new ContextMenuStrip();
+        var menu = new ContextMenuStrip();
         var item = listBox.SelectedItem;
         var file = (KeyValuePair<string, List<string>>)item;
         if(file.Value.Count <= 50)
         {
             foreach(var path in file.Value)
             {
-                ToolStripMenuItem menuItem = new ToolStripMenuItem();
+                var menuItem = new ToolStripMenuItem();
                 menuItem.Text = path;
                 menuItem.Enabled = true;
                 menuItem.Click += MenuClickListBox;
@@ -463,7 +528,7 @@ class MainForm : Form
         }
         else
         {
-            ToolStripMenuItem menuItem = new ToolStripMenuItem();
+            var menuItem = new ToolStripMenuItem();
             menuItem.Text = "ファイル数が50個を超えています。";
             menuItem.Enabled = false;
             menu.Items.Add(menuItem);
@@ -473,7 +538,7 @@ class MainForm : Form
     
     private void MenuClickListBox(object sender, EventArgs e)
     {
-        ToolStripMenuItem menuItem = (ToolStripMenuItem)sender;
+        var menuItem = (ToolStripMenuItem)sender;
         OpenFile(menuItem.Text);
     }
     
@@ -628,6 +693,7 @@ class SubForm : Form
     
     private CheckBox checkBoxTopMost = new CheckBox();
     private CheckBox checkBoxAutoTrim = new CheckBox();
+    private CheckBox checkBoxParallel = new CheckBox();
     private CheckBox checkBoxLookahead = new CheckBox();
     private CheckBox checkBoxTaskTray = new CheckBox();
     
@@ -855,35 +921,39 @@ class SubForm : Form
         this.Controls.Add(groupBox3);
         
         // チェックボックス（Topmost）
-        checkBoxTopMost.Text = "フォームを常に手前に表示する。";
+        checkBoxTopMost.Text = "フォームを常に手前に表示する";
         checkBoxTopMost.Location = new Point(10, 20);
-        checkBoxTopMost.Size = new Size(755, 20);
+        checkBoxTopMost.AutoSize = true;
         checkBoxTopMost.Checked = false;
         groupBox3.Controls.Add(checkBoxTopMost);
         
         // チェックボックス（AutoTrim）
-        checkBoxAutoTrim.Text = "フォームに入力したファイル名の前後に空白が含まれている場合は自動で削除する。";
+        checkBoxAutoTrim.Text = "フォームに入力したファイル名の前後に空白が含まれている場合は自動で削除する";
         checkBoxAutoTrim.Location = new Point(10, 45);
-        checkBoxAutoTrim.Size = new Size(755, 20);
+        checkBoxAutoTrim.AutoSize = true;
         checkBoxAutoTrim.Checked = false;
         groupBox3.Controls.Add(checkBoxAutoTrim);
         
+        // チェックボックス（Parallel）
+        checkBoxParallel.Text = "ファイルの検索処理を検索フォルダごとに並列に処理する (処理速度が向上する場合があります)";
+        checkBoxParallel.Location = new Point(10, 70);
+        checkBoxParallel.AutoSize = true;
+        checkBoxParallel.Checked = false;
+        groupBox3.Controls.Add(checkBoxParallel);
+        
         // チェックボックス（Lookahead）
-        checkBoxLookahead.Text = "アプリケーション起動時に検索フォルダに格納されているファイルの一覧を先読みしてメモリに記憶する。";
-        checkBoxLookahead.Location = new Point(10, 70);
-        checkBoxLookahead.Size = new Size(755, 20);
+        checkBoxLookahead.Text = "アプリケーション起動時に検索フォルダに格納されているファイルの一覧を先読みしてメモリに記憶する";
+        checkBoxLookahead.Location = new Point(10, 95);
+        checkBoxLookahead.AutoSize = true;
         checkBoxLookahead.Checked = false;
         groupBox3.Controls.Add(checkBoxLookahead);
         
         // チェックボックス（Tasktray）
-        checkBoxTaskTray.Text = "アプリケーション起動時にタスクトレイに常駐する。(*1)";
-        checkBoxTaskTray.Location = new Point(10, 95);
-        checkBoxTaskTray.Size = new Size(755, 20);
+        checkBoxTaskTray.Text = "アプリケーション起動時にタスクトレイに常駐する (次回アプリケーション起動時に有効となります)";
+        checkBoxTaskTray.Location = new Point(10, 120);
+        checkBoxTaskTray.AutoSize = true;
         checkBoxTaskTray.Checked = false;
         groupBox3.Controls.Add(checkBoxTaskTray);
-        
-        // ラベル
-        groupBox3.Controls.Add(CreateLabel(10, 120, "(*1) 次回アプリケーション起動時に有効となります。"));
         
         // 保存ボタン
         var buttonSave = new Button();
@@ -1287,6 +1357,7 @@ class SubForm : Form
         }
         config.TopMost = checkBoxTopMost.Checked;
         config.AutoTrim = checkBoxAutoTrim.Checked;
+        config.Parallel = checkBoxParallel.Checked;
         config.Lookahead = checkBoxLookahead.Checked;
         config.TaskTray = checkBoxTaskTray.Checked;
         config.Save();
@@ -1319,6 +1390,7 @@ class SubForm : Form
         }
         checkBoxTopMost.Checked = config.TopMost;
         checkBoxAutoTrim.Checked = config.AutoTrim;
+        checkBoxParallel.Checked = config.Parallel;
         checkBoxLookahead.Checked = config.Lookahead;
         checkBoxTaskTray.Checked = config.TaskTray;
     }
@@ -1334,6 +1406,7 @@ class Config
     public int Count { get; set; }
     public bool TopMost { get; set; }
     public bool AutoTrim { get; set; }
+    public bool Parallel { get; set; }
     public bool Lookahead { get; set; }
     public bool TaskTray { get; set; }
     public List<Element> Path { get; set; }
@@ -1368,6 +1441,7 @@ class Config
         Count = GetIntValue(xml, "count");
         TopMost = GetBoolValue(xml, "topmost");
         AutoTrim = GetBoolValue(xml, "trim");
+        Parallel = GetBoolValue(xml, "parallel");
         Lookahead = GetBoolValue(xml, "lookahead");
         TaskTray = GetBoolValue(xml, "tasktray");
         Path = GetListValue(xml, "path");
@@ -1385,6 +1459,7 @@ class Config
         SetElementValue(xml, "count", Count);
         SetElementValue(xml, "topmost", TopMost);
         SetElementValue(xml, "trim", AutoTrim);
+        SetElementValue(xml, "parallel", Parallel);
         SetElementValue(xml, "lookahead", Lookahead);
         SetElementValue(xml, "tasktray", TaskTray);
         SetElementValue(xml, "path", Path);
@@ -1450,6 +1525,7 @@ class Config
                     new XElement("count", "10"),
                     new XElement("topmost", "False"),
                     new XElement("trim", "False"),
+                    new XElement("parallel", "False"),
                     new XElement("lookahead", "False"),
                     new XElement("tasktray", "False"),
                     new XElement("path", Environment.GetFolderPath(Environment.SpecialFolder.Personal)),
