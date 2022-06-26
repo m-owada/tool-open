@@ -7,6 +7,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -65,6 +66,7 @@ class MainForm : Form
     private Button button = new Button();
     private ListBox listBox = new ListBox();
     private NotifyIcon notifyIcon = new NotifyIcon();
+    private HotKey hotKey;
     private Dictionary<string, List<string>> lookaheadFiles = new Dictionary<string, List<string>>();
     private readonly string windowsFolder = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
     
@@ -139,6 +141,12 @@ class MainForm : Form
         {
             this.Show();
         }
+        
+        // ホットキー
+        SetHotKey(config.HotKey);
+        
+        // 終了イベント
+        Application.ApplicationExit += ApplicationExit;
         
         // ファイル先読み
         if(config.Lookahead)
@@ -427,6 +435,7 @@ class MainForm : Form
     
     private void ShowSubForm()
     {
+        hotKey.Dispose();
         button.Enabled = false;
         var topmost = this.TopMost;
         this.TopMost = false;
@@ -435,9 +444,9 @@ class MainForm : Form
         this.TopMost = topmost;
         button.Enabled = true;
         
+        var config = new Config();
         if(subForm.IsSave)
         {
-            var config = new Config();
             this.TopMost = config.TopMost;
             comboBox.Text = string.Empty;
             listBox.DataSource = null;
@@ -448,6 +457,7 @@ class MainForm : Form
                 SetLookaheadFiles();
             }
         }
+        SetHotKey(config.HotKey);
     }
     
     private void EnabledChangedButton(object sender, EventArgs e)
@@ -514,10 +524,10 @@ class MainForm : Form
     {
         var menu = new ContextMenuStrip();
         var item = listBox.SelectedItem;
-        var file = (KeyValuePair<string, List<string>>)item;
-        if(file.Value.Count <= 50)
+        var files = ((KeyValuePair<string, List<string>>)item).Value.Distinct();
+        if(files.Count() <= 50)
         {
-            foreach(var path in file.Value)
+            foreach(var path in files)
             {
                 var menuItem = new ToolStripMenuItem();
                 menuItem.Text = path;
@@ -539,20 +549,32 @@ class MainForm : Form
     private void MenuClickListBox(object sender, EventArgs e)
     {
         var menuItem = (ToolStripMenuItem)sender;
-        OpenFile(menuItem.Text);
+        if(OpenFile(menuItem.Text))
+        {
+            WindowAutoMinimized();
+        }
     }
     
     private void OpenFiles()
     {
+        var error = false;
         foreach(var item in listBox.SelectedItems)
         {
             var file = (KeyValuePair<string, List<string>>)item;
-            OpenFile(file.Value.First());
+            if(!OpenFile(file.Value.First()))
+            {
+                error = true;
+            }
+        }
+        if(!error)
+        {
+            WindowAutoMinimized();
         }
     }
     
-    private void OpenFile(string path)
+    private bool OpenFile(string path)
     {
+        var result = false;
         listBox.Enabled = false;
         if(File.Exists(path))
         {
@@ -577,12 +599,24 @@ class MainForm : Form
             {
                 Process.Start(path);
             }
+            result = true;
         }
         else
         {
             MessageBox.Show("ファイル \"" + path + "\" が見つかりません。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         listBox.Enabled = true;
+        listBox.Focus();
+        return result;
+    }
+    
+    private void WindowAutoMinimized()
+    {
+        var config = new Config();
+        if(config.Minimize)
+        {
+            this.WindowState = FormWindowState.Minimized;
+        }
     }
     
     private void CopyFiles()
@@ -642,6 +676,43 @@ class MainForm : Form
         this.Activate();
     }
     
+    private void SetHotKey(Keys keyData)
+    {
+        var modKeyCode = (keyData & Keys.Modifiers);
+        var hotKeyCode = (keyData & Keys.KeyCode);
+        hotKey = new HotKey(ConvertModKey(modKeyCode), hotKeyCode);
+        hotKey.HotKeyPush += HotKeyPush;
+    }
+    
+    private HotKey.ModKey ConvertModKey(Keys modKeyCode)
+    {
+        var key = HotKey.ModKey.None;
+        if((modKeyCode & Keys.Shift) == Keys.Shift)
+        {
+            key |= HotKey.ModKey.Shift;
+        }
+        if((modKeyCode & Keys.Control) == Keys.Control)
+        {
+            key |= HotKey.ModKey.Control;
+        }
+        if((modKeyCode & Keys.Alt) == Keys.Alt)
+        {
+            key |= HotKey.ModKey.Alt;
+        }
+        return key;
+    }
+    
+    private void HotKeyPush(object sender, EventArgs e)
+    {
+        ShowForm();
+    }
+    
+    private void ApplicationExit(object sender, EventArgs e)
+    {
+        hotKey.Dispose();
+        Application.ApplicationExit -= ApplicationExit;
+    }
+    
     private async void SetLookaheadFiles()
     {
         comboBox.Enabled = false;
@@ -694,14 +765,18 @@ class SubForm : Form
     private CheckBox checkBoxTopMost = new CheckBox();
     private CheckBox checkBoxAutoTrim = new CheckBox();
     private CheckBox checkBoxParallel = new CheckBox();
+    private CheckBox checkBoxMinimize = new CheckBox();
     private CheckBox checkBoxLookahead = new CheckBox();
     private CheckBox checkBoxTaskTray = new CheckBox();
+    private TextBox textBoxHotKey = new TextBox();
+    
+    private Keys hotKeyData = Keys.None;
     
     public SubForm()
     {
         // フォーム
         this.Text = "設定";
-        this.Size = new Size(800, 720);
+        this.Size = new Size(800, 700);
         this.MaximizeBox = false;
         this.MinimizeBox = true;
         this.StartPosition = FormStartPosition.CenterScreen;
@@ -714,7 +789,7 @@ class SubForm : Form
         // グループボックス1
         var groupBox1 = new GroupBox();
         groupBox1.Location = new Point(10, 10);
-        groupBox1.Size = new Size(775, 230);
+        groupBox1.Size = new Size(775, 210);
         groupBox1.FlatStyle = FlatStyle.Standard;
         groupBox1.Text = "【検索フォルダ】";
         this.Controls.Add(groupBox1);
@@ -724,7 +799,7 @@ class SubForm : Form
         
         // データグリッドビュー1
         dataGridView1.Location = new Point(10, 40);
-        dataGridView1.Size = new Size(755, 150);
+        dataGridView1.Size = new Size(755, 130);
         dataGridView1.DataSource = dataSource1;
         dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         dataGridView1.AllowUserToAddRows = false;
@@ -736,17 +811,17 @@ class SubForm : Form
         groupBox1.Controls.Add(dataGridView1);
         
         // ラベル
-        groupBox1.Controls.Add(CreateLabel(10, 200, "フォルダ"));
+        groupBox1.Controls.Add(CreateLabel(10, 180, "フォルダ"));
         
         // テキストボックス（Path）
-        textBoxPath.Location = new Point(55, 200);
+        textBoxPath.Location = new Point(55, 180);
         textBoxPath.Size = new Size(430, 20);
         textBoxPath.Text = string.Empty;
         groupBox1.Controls.Add(textBoxPath);
         
         // 参照ボタン1
         var buttonRef1 = new Button();
-        buttonRef1.Location = new Point(495, 200);
+        buttonRef1.Location = new Point(495, 180);
         buttonRef1.Size = new Size(40, 20);
         buttonRef1.Text = "参照";
         buttonRef1.Click += ClickButtonRef1;
@@ -755,7 +830,7 @@ class SubForm : Form
         
         // 追加ボタン1
         var buttonAdd1 = new Button();
-        buttonAdd1.Location = new Point(540, 200);
+        buttonAdd1.Location = new Point(540, 180);
         buttonAdd1.Size = new Size(40, 20);
         buttonAdd1.Text = "追加";
         buttonAdd1.Click += ClickButtonAdd1;
@@ -764,7 +839,7 @@ class SubForm : Form
         
         // 更新ボタン1
         var buttonMod1 = new Button();
-        buttonMod1.Location = new Point(585, 200);
+        buttonMod1.Location = new Point(585, 180);
         buttonMod1.Size = new Size(40, 20);
         buttonMod1.Text = "更新";
         buttonMod1.Click += ClickButtonMod1;
@@ -773,7 +848,7 @@ class SubForm : Form
         
         // 削除ボタン1
         var buttonDel1 = new Button();
-        buttonDel1.Location = new Point(630, 200);
+        buttonDel1.Location = new Point(630, 180);
         buttonDel1.Size = new Size(40, 20);
         buttonDel1.Text = "削除";
         buttonDel1.Click += ClickButtonDel1;
@@ -782,7 +857,7 @@ class SubForm : Form
         
         // 無効ボタン1
         var buttonDis1 = new Button();
-        buttonDis1.Location = new Point(675, 200);
+        buttonDis1.Location = new Point(675, 180);
         buttonDis1.Size = new Size(40, 20);
         buttonDis1.Text = "無効";
         buttonDis1.Click += ClickButtonDis1;
@@ -791,7 +866,7 @@ class SubForm : Form
         
         // ↑ボタン1
         var buttonUp1 = new Button();
-        buttonUp1.Location = new Point(720, 200);
+        buttonUp1.Location = new Point(720, 180);
         buttonUp1.Size = new Size(20, 20);
         buttonUp1.Text = "↑";
         buttonUp1.Click += ClickButtonUp1;
@@ -800,7 +875,7 @@ class SubForm : Form
         
         // ↓ボタン1
         var buttonDown1 = new Button();
-        buttonDown1.Location = new Point(745, 200);
+        buttonDown1.Location = new Point(745, 180);
         buttonDown1.Size = new Size(20, 20);
         buttonDown1.Text = "↓";
         buttonDown1.Click += ClickButtonDown1;
@@ -809,8 +884,8 @@ class SubForm : Form
         
         // グループボックス2
         var groupBox2 = new GroupBox();
-        groupBox2.Location = new Point(10, 250);
-        groupBox2.Size = new Size(775, 230);
+        groupBox2.Location = new Point(10, 230);
+        groupBox2.Size = new Size(775, 210);
         groupBox2.FlatStyle = FlatStyle.Standard;
         groupBox2.Text = "【拡張子／エディタ指定】";
         this.Controls.Add(groupBox2);
@@ -820,7 +895,7 @@ class SubForm : Form
         
         // データグリッドビュー2
         dataGridView2.Location = new Point(10, 40);
-        dataGridView2.Size = new Size(755, 150);
+        dataGridView2.Size = new Size(755, 130);
         dataGridView2.DataSource = dataSource2;
         dataGridView2.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         dataGridView2.AllowUserToAddRows = false;
@@ -832,26 +907,26 @@ class SubForm : Form
         groupBox2.Controls.Add(dataGridView2);
         
         // ラベル
-        groupBox2.Controls.Add(CreateLabel(10, 200, "拡張子"));
+        groupBox2.Controls.Add(CreateLabel(10, 180, "拡張子"));
         
         // テキストボックス（Extension）
-        textBoxExtension.Location = new Point(55, 200);
+        textBoxExtension.Location = new Point(55, 180);
         textBoxExtension.Size = new Size(60, 20);
         textBoxExtension.Text = string.Empty;
         groupBox2.Controls.Add(textBoxExtension);
         
         // ラベル
-        groupBox2.Controls.Add(CreateLabel(125, 200, "エディタ"));
+        groupBox2.Controls.Add(CreateLabel(125, 180, "エディタ"));
         
         // テキストボックス（Editor）
-        textBoxEditor.Location = new Point(170, 200);
+        textBoxEditor.Location = new Point(170, 180);
         textBoxEditor.Size = new Size(315, 20);
         textBoxEditor.Text = string.Empty;
         groupBox2.Controls.Add(textBoxEditor);
         
         // 参照ボタン2
         var buttonRef2 = new Button();
-        buttonRef2.Location = new Point(495, 200);
+        buttonRef2.Location = new Point(495, 180);
         buttonRef2.Size = new Size(40, 20);
         buttonRef2.Text = "参照";
         buttonRef2.Click += ClickButtonRef2;
@@ -860,7 +935,7 @@ class SubForm : Form
         
         // 追加ボタン2
         var buttonAdd2 = new Button();
-        buttonAdd2.Location = new Point(540, 200);
+        buttonAdd2.Location = new Point(540, 180);
         buttonAdd2.Size = new Size(40, 20);
         buttonAdd2.Text = "追加";
         buttonAdd2.Click += ClickButtonAdd2;
@@ -869,7 +944,7 @@ class SubForm : Form
         
         // 更新ボタン2
         var buttonMod2 = new Button();
-        buttonMod2.Location = new Point(585, 200);
+        buttonMod2.Location = new Point(585, 180);
         buttonMod2.Size = new Size(40, 20);
         buttonMod2.Text = "更新";
         buttonMod2.Click += ClickButtonMod2;
@@ -878,7 +953,7 @@ class SubForm : Form
         
         // 削除ボタン2
         var buttonDel2 = new Button();
-        buttonDel2.Location = new Point(630, 200);
+        buttonDel2.Location = new Point(630, 180);
         buttonDel2.Size = new Size(40, 20);
         buttonDel2.Text = "削除";
         buttonDel2.Click += ClickButtonDel2;
@@ -887,7 +962,7 @@ class SubForm : Form
         
         // 無効ボタン2
         var buttonDis2 = new Button();
-        buttonDis2.Location = new Point(675, 200);
+        buttonDis2.Location = new Point(675, 180);
         buttonDis2.Size = new Size(40, 20);
         buttonDis2.Text = "無効";
         buttonDis2.Click += ClickButtonDis2;
@@ -896,7 +971,7 @@ class SubForm : Form
         
         // ↑ボタン2
         var buttonUp2 = new Button();
-        buttonUp2.Location = new Point(720, 200);
+        buttonUp2.Location = new Point(720, 180);
         buttonUp2.Size = new Size(20, 20);
         buttonUp2.Text = "↑";
         buttonUp2.Click += ClickButtonUp2;
@@ -905,7 +980,7 @@ class SubForm : Form
         
         // ↓ボタン2
         var buttonDown2 = new Button();
-        buttonDown2.Location = new Point(745, 200);
+        buttonDown2.Location = new Point(745, 180);
         buttonDown2.Size = new Size(20, 20);
         buttonDown2.Text = "↓";
         buttonDown2.Click += ClickButtonDown2;
@@ -914,8 +989,8 @@ class SubForm : Form
         
         // グループボックス3
         var groupBox3 = new GroupBox();
-        groupBox3.Location = new Point(10, 490);
-        groupBox3.Size = new Size(775, 150);
+        groupBox3.Location = new Point(10, 450);
+        groupBox3.Size = new Size(775, 170);
         groupBox3.FlatStyle = FlatStyle.Standard;
         groupBox3.Text = "【その他】";
         this.Controls.Add(groupBox3);
@@ -934,30 +1009,57 @@ class SubForm : Form
         checkBoxAutoTrim.Checked = false;
         groupBox3.Controls.Add(checkBoxAutoTrim);
         
+        // チェックボックス（Minimize）
+        checkBoxMinimize.Text = "ファイルを開くと同時に自動でフォームを最小化する";
+        checkBoxMinimize.Location = new Point(10, 70);
+        checkBoxMinimize.AutoSize = true;
+        checkBoxMinimize.Checked = false;
+        groupBox3.Controls.Add(checkBoxMinimize);
+        
         // チェックボックス（Parallel）
         checkBoxParallel.Text = "ファイルの検索処理を検索フォルダごとに並列に処理する (処理速度が向上する場合があります)";
-        checkBoxParallel.Location = new Point(10, 70);
+        checkBoxParallel.Location = new Point(10, 95);
         checkBoxParallel.AutoSize = true;
         checkBoxParallel.Checked = false;
         groupBox3.Controls.Add(checkBoxParallel);
         
         // チェックボックス（Lookahead）
         checkBoxLookahead.Text = "アプリケーション起動時に検索フォルダに格納されているファイルの一覧を先読みしてメモリに記憶する";
-        checkBoxLookahead.Location = new Point(10, 95);
+        checkBoxLookahead.Location = new Point(10, 120);
         checkBoxLookahead.AutoSize = true;
         checkBoxLookahead.Checked = false;
         groupBox3.Controls.Add(checkBoxLookahead);
         
         // チェックボックス（Tasktray）
         checkBoxTaskTray.Text = "アプリケーション起動時にタスクトレイに常駐する (次回アプリケーション起動時に有効となります)";
-        checkBoxTaskTray.Location = new Point(10, 120);
+        checkBoxTaskTray.Location = new Point(10, 145);
         checkBoxTaskTray.AutoSize = true;
         checkBoxTaskTray.Checked = false;
         groupBox3.Controls.Add(checkBoxTaskTray);
         
+        // ラベル（HotKey）
+        var labelHotKey = new Label();
+        labelHotKey.Location = new Point(20, 630);
+        labelHotKey.Size = new Size(100, 20);
+        labelHotKey.Text = "ショートカットキー";
+        labelHotKey.BorderStyle = BorderStyle.Fixed3D;
+        labelHotKey.TextAlign = ContentAlignment.MiddleCenter;
+        this.Controls.Add(labelHotKey);
+        
+        // テキストボックス（HotKey）
+        textBoxHotKey.Location = new Point(130, 630);
+        textBoxHotKey.Size = new Size(160, 20);
+        textBoxHotKey.Text = string.Empty;
+        textBoxHotKey.TextAlign = HorizontalAlignment.Center;
+        textBoxHotKey.ReadOnly = true;
+        textBoxHotKey.BackColor = SystemColors.Window;
+        textBoxHotKey.ShortcutsEnabled = false;
+        textBoxHotKey.PreviewKeyDown += PreviewKeyDownTextBoxHotKey;
+        this.Controls.Add(textBoxHotKey);
+        
         // 保存ボタン
         var buttonSave = new Button();
-        buttonSave.Location = new Point(650, 650);
+        buttonSave.Location = new Point(650, 630);
         buttonSave.Size = new Size(60, 30);
         buttonSave.Text = "保存";
         buttonSave.Click += ClickButtonSave;
@@ -966,7 +1068,7 @@ class SubForm : Form
         
         // 中止ボタン
         var buttonCancel  = new Button();
-        buttonCancel.Location = new Point(720, 650);
+        buttonCancel.Location = new Point(720, 630);
         buttonCancel.Size = new Size(60, 30);
         buttonCancel.Text = "中止";
         buttonCancel.Click += ClickButtonCancel;
@@ -1328,6 +1430,63 @@ class SubForm : Form
         }
     }
     
+    private void PreviewKeyDownTextBoxHotKey(object sender, PreviewKeyDownEventArgs e)
+    {
+        var keyString = GetKeyString(e.KeyData);
+        if(keyString == string.Empty)
+        {
+            hotKeyData = Keys.None;
+            textBoxHotKey.Text = string.Empty;
+        }
+        else
+        {
+            hotKeyData = e.KeyData;
+            textBoxHotKey.Text = keyString;
+        }
+    }
+    
+    private string GetKeyString(Keys keyData)
+    {
+        var modKey = (keyData & Keys.Modifiers);
+        var modStr = string.Empty;
+        if((modKey & Keys.Shift) == Keys.Shift)
+        {
+            modStr += modStr == string.Empty ? "Shift" : " + Shift";
+        }
+        if((modKey & Keys.Control) == Keys.Control)
+        {
+            modStr += modStr == string.Empty ? "Control" : " + Control";
+        }
+        if((modKey & Keys.Alt) == Keys.Alt)
+        {
+            modStr += modStr == string.Empty ? "Alt" : " + Alt";
+        }
+        
+        var hotKey = (keyData & Keys.KeyCode);
+        var hotStr = string.Empty;
+        if(Keys.D0 <= hotKey && hotKey <= Keys.D9)
+        {
+            hotStr = ((int)hotKey - (int)Keys.D0).ToString();
+        }
+        else if(Keys.A <= hotKey && hotKey <= Keys.Z)
+        {
+            hotStr = hotKey.ToString();
+        }
+        else if(Keys.F1 <= hotKey && hotKey <= Keys.F12)
+        {
+            hotStr = hotKey.ToString();
+        }
+        
+        if(modStr != string.Empty && hotStr != string.Empty)
+        {
+            return modStr + " + " + hotStr;
+        }
+        else
+        {
+            return string.Empty;
+        }
+    }
+    
     private void ClickButtonSave(object sender, EventArgs e)
     {
         var disable = true;
@@ -1358,8 +1517,10 @@ class SubForm : Form
         config.TopMost = checkBoxTopMost.Checked;
         config.AutoTrim = checkBoxAutoTrim.Checked;
         config.Parallel = checkBoxParallel.Checked;
+        config.Minimize = checkBoxMinimize.Checked;
         config.Lookahead = checkBoxLookahead.Checked;
         config.TaskTray = checkBoxTaskTray.Checked;
+        config.HotKey = hotKeyData;
         config.Save();
         IsSave = true;
         this.Close();
@@ -1391,8 +1552,15 @@ class SubForm : Form
         checkBoxTopMost.Checked = config.TopMost;
         checkBoxAutoTrim.Checked = config.AutoTrim;
         checkBoxParallel.Checked = config.Parallel;
+        checkBoxMinimize.Checked = config.Minimize;
         checkBoxLookahead.Checked = config.Lookahead;
         checkBoxTaskTray.Checked = config.TaskTray;
+        var keyString = GetKeyString(config.HotKey);
+        if(keyString != string.Empty)
+        {
+            hotKeyData = config.HotKey;
+            textBoxHotKey.Text = keyString;
+        }
     }
 }
 
@@ -1407,8 +1575,10 @@ class Config
     public bool TopMost { get; set; }
     public bool AutoTrim { get; set; }
     public bool Parallel { get; set; }
+    public bool Minimize { get; set; }
     public bool Lookahead { get; set; }
     public bool TaskTray { get; set; }
+    public Keys HotKey { get; set; }
     public List<Element> Path { get; set; }
     public List<Element> Editor { get; set; }
     public List<Element> History { get; set; }
@@ -1442,8 +1612,10 @@ class Config
         TopMost = GetBoolValue(xml, "topmost");
         AutoTrim = GetBoolValue(xml, "trim");
         Parallel = GetBoolValue(xml, "parallel");
+        Minimize = GetBoolValue(xml, "minimize");
         Lookahead = GetBoolValue(xml, "lookahead");
         TaskTray = GetBoolValue(xml, "tasktray");
+        HotKey = GetKeysValue(xml, "hotkey");
         Path = GetListValue(xml, "path");
         Editor = GetListValue(xml, "editor", "extension");
         History = GetListValue(xml, "history");
@@ -1460,8 +1632,10 @@ class Config
         SetElementValue(xml, "topmost", TopMost);
         SetElementValue(xml, "trim", AutoTrim);
         SetElementValue(xml, "parallel", Parallel);
+        SetElementValue(xml, "minimize", Minimize);
         SetElementValue(xml, "lookahead", Lookahead);
         SetElementValue(xml, "tasktray", TaskTray);
+        SetElementValue(xml, "hotkey", HotKey);
         SetElementValue(xml, "path", Path);
         SetElementValue(xml, "editor", "extension", Editor);
         SetElementValue(xml, "history", History);
@@ -1526,8 +1700,10 @@ class Config
                     new XElement("topmost", "False"),
                     new XElement("trim", "False"),
                     new XElement("parallel", "False"),
+                    new XElement("minimize", "False"),
                     new XElement("lookahead", "False"),
                     new XElement("tasktray", "False"),
+                    new XElement("hotkey", "None"),
                     new XElement("path", Environment.GetFolderPath(Environment.SpecialFolder.Personal)),
                     new XElement("editor", @"C:\Windows\notepad.exe", new XAttribute("extension", "txt"))
                 )
@@ -1553,6 +1729,16 @@ class Config
         if(node.Element(name) != null)
         {
             Boolean.TryParse(node.Element(name).Value, out val);
+        }
+        return val;
+    }
+    
+    private Keys GetKeysValue(XElement node, string name)
+    {
+        Keys val = Keys.None;
+        if(node.Element(name) != null)
+        {
+            Enum.TryParse<Keys>(node.Element(name).Value, out val);
         }
         return val;
     }
@@ -1618,6 +1804,11 @@ class Config
         SetElementValue(node, name, val.ToString());
     }
     
+    private void SetElementValue(XElement node, string name, Keys val)
+    {
+        SetElementValue(node, name, val.ToString());
+    }
+    
     private void SetElementValue(XElement node, string name, string attribute, List<Element> items)
     {
         if(node.Element(name) != null)
@@ -1657,5 +1848,81 @@ class Config
     private void SetElementValue(XElement node, string name, List<Element> items)
     {
         SetElementValue(node, name, string.Empty, items);
+    }
+}
+
+class HotKey : IDisposable
+{
+    public event EventHandler HotKeyPush;
+    
+    public enum ModKey
+    {
+        None = 0x0000,
+        Alt = 0x0001,
+        Control = 0x0002,
+        Shift = 0x0004,
+    }
+    
+    private HotKeyForm form;
+    
+    public HotKey(ModKey modKey, Keys key)
+    {
+        form = new HotKeyForm(modKey, key, raiseHotKeyPush);
+    }
+    
+    private void raiseHotKeyPush()
+    {
+        if(HotKeyPush != null)
+        {
+            HotKeyPush(this, EventArgs.Empty);
+        }
+    }
+    
+    public void Dispose()
+    {
+        form.Dispose();
+    }
+    
+    private class HotKeyForm : Form
+    {
+        [DllImport("user32.dll")]
+        private extern static int RegisterHotKey(IntPtr hWnd, int id, ModKey modKey, Keys key);
+        
+        [DllImport("user32.dll")]
+        private extern static int UnregisterHotKey(IntPtr hWnd, int id);
+        
+        private ThreadStart proc;
+        private int hotKeyId = 0x000;
+        
+        public HotKeyForm(ModKey modKey, Keys key, ThreadStart proc)
+        {
+            this.proc = proc;
+            for(int i = 0x000; i <= 0xbfff; i++)
+            {
+                if(RegisterHotKey(Handle, i, modKey, key) != 0)
+                {
+                    hotKeyId = i;
+                    break;
+                }
+            }
+        }
+        
+        protected override void WndProc(ref Message message)
+        {
+            base.WndProc(ref message);
+            if(message.Msg == 0x0312)
+            {
+                if((int)message.WParam == hotKeyId)
+                {
+                    proc();
+                }
+            }
+        }
+        
+        protected override void Dispose(bool disposing)
+        {
+            UnregisterHotKey(Handle, hotKeyId);
+            base.Dispose(disposing);
+        }
     }
 }
