@@ -14,9 +14,9 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml.Linq;
 
-[assembly: AssemblyVersion("2.0.0.0")]
-[assembly: AssemblyFileVersion ("2.0.0.0")]
-[assembly: AssemblyInformationalVersion("2.0")]
+[assembly: AssemblyVersion("3.0.0.0")]
+[assembly: AssemblyFileVersion ("3.0.0.0")]
+[assembly: AssemblyInformationalVersion("3.0")]
 [assembly: AssemblyTitle("")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyProduct("OPEN")]
@@ -235,16 +235,16 @@ class MainForm : Form
         {
             comboBox.SelectionStart = 0;
             comboBox.SelectionLength = comboBox.Text.Length;
-            comboBox.Focus();
+            comboBox.Select();
         }
         else if(listBox.Items.Count == 1)
         {
             OpenFiles();
-            comboBox.Focus();
+            comboBox.Select();
         }
         else
         {
-            listBox.Focus();
+            listBox.Select();
         }
     }
     
@@ -443,11 +443,12 @@ class MainForm : Form
         subForm.ShowDialog();
         this.TopMost = topmost;
         button.Enabled = true;
+        comboBox.Select();
         
         var config = new Config();
-        if(subForm.IsSave)
+        this.TopMost = config.TopMost;
+        if(subForm.IsChanged)
         {
-            this.TopMost = config.TopMost;
             comboBox.Text = string.Empty;
             listBox.DataSource = null;
             lookaheadFiles = new Dictionary<string, List<string>>();
@@ -606,7 +607,7 @@ class MainForm : Form
             MessageBox.Show("ファイル \"" + path + "\" が見つかりません。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         listBox.Enabled = true;
-        listBox.Focus();
+        listBox.Select();
         return result;
     }
     
@@ -674,6 +675,7 @@ class MainForm : Form
             this.WindowState = FormWindowState.Normal;
         }
         this.Activate();
+        comboBox.Select();
     }
     
     private void SetHotKey(Keys keyData)
@@ -723,7 +725,7 @@ class MainForm : Form
         });
         comboBox.Enabled = true;
         button.Enabled = true;
-        comboBox.Focus();
+        comboBox.Select();
     }
     
     private Dictionary<string, List<string>> GetLookaheadFiles(string keyword)
@@ -751,7 +753,7 @@ class MainForm : Form
 
 class SubForm : Form
 {
-    public bool IsSave { get; private set; }
+    public bool IsChanged { get; private set; }
     
     private DataGridView dataGridView1 = new DataGridView();
     private BindingList<Columns1> dataSource1 = new BindingList<Columns1>();
@@ -1028,6 +1030,7 @@ class SubForm : Form
         checkBoxLookahead.Location = new Point(10, 120);
         checkBoxLookahead.AutoSize = true;
         checkBoxLookahead.Checked = false;
+        checkBoxLookahead.CheckedChanged += CheckedChangedCheckBoxLookahead;
         groupBox3.Controls.Add(checkBoxLookahead);
         
         // チェックボックス（Tasktray）
@@ -1077,7 +1080,6 @@ class SubForm : Form
         
         // データ読込
         LoadData();
-        IsSave = false;
     }
     
     private class Columns1
@@ -1216,7 +1218,7 @@ class SubForm : Form
         if(String.IsNullOrWhiteSpace(textBoxPath.Text))
         {
             MessageBox.Show("検索フォルダを入力してください。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
-            textBoxPath.Focus();
+            textBoxPath.Select();
             return false;
         }
         if(dataSource1.Count >= 100)
@@ -1236,7 +1238,8 @@ class SubForm : Form
             dataSource1.Add(row);
             dataGridView1.CurrentCell = dataGridView1[0, dataGridView1.RowCount - 1];
             textBoxPath.Text = string.Empty;
-            textBoxPath.Focus();
+            textBoxPath.Select();
+            IsChanged = true;
         }
     }
     
@@ -1248,6 +1251,7 @@ class SubForm : Form
             row.Path = textBoxPath.Text;
             dataGridView1.Refresh();
             textBoxPath.Text = string.Empty;
+            IsChanged = true;
         }
     }
     
@@ -1261,6 +1265,7 @@ class SubForm : Form
                 dataGridView1.CurrentCell = dataGridView1[0, dataGridView1.CurrentCell.RowIndex - 1];
             }
             dataSource1.RemoveAt(index);
+            IsChanged = true;
         }
     }
     
@@ -1271,6 +1276,7 @@ class SubForm : Form
             var row = dataSource1[dataGridView1.CurrentCell.RowIndex];
             row.Disable = !row.Disable;
             SetStrikeoutDataGridView1(dataGridView1.CurrentCell.RowIndex);
+            IsChanged = true;
         }
     }
     
@@ -1286,6 +1292,7 @@ class SubForm : Form
                 SetStrikeoutDataGridView1(dataGridView1.CurrentCell.RowIndex);
                 SetStrikeoutDataGridView1(dataGridView1.CurrentCell.RowIndex - 1);
                 dataGridView1.CurrentCell = dataGridView1[0, dataGridView1.CurrentCell.RowIndex - 1];
+                IsChanged = true;
             }
         }
     }
@@ -1302,6 +1309,7 @@ class SubForm : Form
                 SetStrikeoutDataGridView1(dataGridView1.CurrentCell.RowIndex);
                 SetStrikeoutDataGridView1(dataGridView1.CurrentCell.RowIndex + 1);
                 dataGridView1.CurrentCell = dataGridView1[0, dataGridView1.CurrentCell.RowIndex + 1];
+                IsChanged = true;
             }
         }
     }
@@ -1336,7 +1344,7 @@ class SubForm : Form
         if(String.IsNullOrWhiteSpace(textBoxExtension.Text))
         {
             MessageBox.Show("検索対象のファイルの拡張子を入力してください。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
-            textBoxExtension.Focus();
+            textBoxExtension.Select();
             return false;
         }
         if(dataSource2.Count >= 100)
@@ -1358,7 +1366,8 @@ class SubForm : Form
             dataGridView2.CurrentCell = dataGridView2[0, dataGridView2.RowCount - 1];
             textBoxExtension.Text = string.Empty;
             textBoxEditor.Text = string.Empty;
-            textBoxExtension.Focus();
+            textBoxExtension.Select();
+            IsChanged = true;
         }
     }
     
@@ -1372,6 +1381,7 @@ class SubForm : Form
             dataGridView2.Refresh();
             textBoxExtension.Text = string.Empty;
             textBoxEditor.Text = string.Empty;
+            IsChanged = true;
         }
     }
     
@@ -1385,6 +1395,7 @@ class SubForm : Form
                 dataGridView2.CurrentCell = dataGridView2[0, dataGridView2.CurrentCell.RowIndex - 1];
             }
             dataSource2.RemoveAt(index);
+            IsChanged = true;
         }
     }
     
@@ -1395,6 +1406,7 @@ class SubForm : Form
             var row = dataSource2[dataGridView2.CurrentCell.RowIndex];
             row.Disable = !row.Disable;
             SetStrikeoutDataGridView2(dataGridView2.CurrentCell.RowIndex);
+            IsChanged = true;
         }
     }
     
@@ -1410,6 +1422,7 @@ class SubForm : Form
                 SetStrikeoutDataGridView2(dataGridView2.CurrentCell.RowIndex);
                 SetStrikeoutDataGridView2(dataGridView2.CurrentCell.RowIndex - 1);
                 dataGridView2.CurrentCell = dataGridView2[0, dataGridView2.CurrentCell.RowIndex - 1];
+                IsChanged = true;
             }
         }
     }
@@ -1426,8 +1439,14 @@ class SubForm : Form
                 SetStrikeoutDataGridView2(dataGridView2.CurrentCell.RowIndex);
                 SetStrikeoutDataGridView2(dataGridView2.CurrentCell.RowIndex + 1);
                 dataGridView2.CurrentCell = dataGridView2[0, dataGridView2.CurrentCell.RowIndex + 1];
+                IsChanged = true;
             }
         }
+    }
+    
+    private void CheckedChangedCheckBoxLookahead(object sender, EventArgs e)
+    {
+        IsChanged = true;
     }
     
     private void PreviewKeyDownTextBoxHotKey(object sender, PreviewKeyDownEventArgs e)
@@ -1522,7 +1541,6 @@ class SubForm : Form
         config.TaskTray = checkBoxTaskTray.Checked;
         config.HotKey = hotKeyData;
         config.Save();
-        IsSave = true;
         this.Close();
     }
     
@@ -1561,6 +1579,7 @@ class SubForm : Form
             hotKeyData = config.HotKey;
             textBoxHotKey.Text = keyString;
         }
+        IsChanged = false;
     }
 }
 
