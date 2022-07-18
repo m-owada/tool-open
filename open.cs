@@ -1546,6 +1546,7 @@ class SubForm : Form
     
     private void ClickButtonCancel(object sender, EventArgs e)
     {
+        IsChanged = false;
         this.Close();
     }
     
