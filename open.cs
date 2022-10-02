@@ -75,7 +75,7 @@ class MainForm : Form
         // フォーム
         this.Text = "OPEN";
         this.Size = new Size(220, 140);
-        this.MinimumSize  = this.Size;
+        this.MinimumSize = this.Size;
         this.Location = new Point(10, 10);
         this.StartPosition = FormStartPosition.Manual;
         this.FormBorderStyle = FormBorderStyle.Sizable;
@@ -190,13 +190,72 @@ class MainForm : Form
     
     private async void EnterComboBox()
     {
-        comboBox.Text = comboBox.Text.Replace(@"/", "").Replace(@"\", "");
         var config = new Config();
         if(config.AutoTrim) comboBox.Text = comboBox.Text.Trim();
+        if(CommandExecute(comboBox.Text))
+        {
+            SaveHistory(comboBox.Text);
+            SetComboBoxItems();
+            return;
+        }
+        comboBox.Text = comboBox.Text.Replace(@"/", "").Replace(@"\", "");
         if(!String.IsNullOrWhiteSpace(comboBox.Text))
         {
             await GetFileList();
         }
+    }
+    
+    private bool CommandExecute(string text)
+    {
+        var result = false;
+        var name = string.Empty;
+        var args = string.Empty;
+        var pos = text.IndexOf(' ');
+        if(pos > 0)
+        {
+            name = text.Substring(0, pos);
+            args = text.Substring(pos + 1).TrimStart();
+        }
+        else
+        {
+            name = text;
+        }
+        var config = new Config();
+        foreach(var command in config.Command.Where(c => !c.Disable && !String.IsNullOrWhiteSpace(c.Attribute)).ToList())
+        {
+            if(command.Attribute == name)
+            {
+                var execute = command.Value.Trim();
+                if(!String.IsNullOrWhiteSpace(args))
+                {
+                    execute = execute.Replace(@"{\0}", args);
+                }
+                for(var i = 0; i < config.Path.Count; i++)
+                {
+                    if(!config.Path[i].Disable)
+                    {
+                        execute = execute.Replace(@"{\" + (i + 1).ToString() + "}", config.Path[i].Value);
+                    }
+                }
+                pos = execute.IndexOf(' ');
+                try
+                {
+                    if(pos > 0)
+                    {
+                        Process.Start(execute.Substring(0, pos), execute.Substring(pos + 1).TrimStart());
+                    }
+                    else
+                    {
+                        Process.Start(execute);
+                    }
+                    result = true;
+                }
+                catch(Exception)
+                {
+                }
+            }
+        }
+        return result;
     }
     
     private async Task GetFileList()
@@ -225,7 +284,6 @@ class MainForm : Form
                 listBox.EndUpdate();
                 SaveHistory(comboBox.Text);
                 SetComboBoxItems();
-                comboBox.Text = string.Empty;
             }
         });
         
@@ -426,6 +484,7 @@ class MainForm : Form
         {
             comboBox.DataSource = items.ToArray();
         }
+        comboBox.Text = string.Empty;
     }
     
     private void ClickButton(object sender, EventArgs e)
@@ -540,7 +599,7 @@ class MainForm : Form
         else
         {
             var menuItem = new ToolStripMenuItem();
-            menuItem.Text = "ファイル数が50個を超えています。";
+            menuItem.Text = "ファイル数が50個を超えています";
             menuItem.Enabled = false;
             menu.Items.Add(menuItem);
         }
@@ -707,6 +766,11 @@ class MainForm : Form
     private void HotKeyPush(object sender, EventArgs e)
     {
         ShowForm();
+        if(comboBox.Enabled && Clipboard.ContainsText())
+        {
+            comboBox.Text = Clipboard.GetText();
+            EnterComboBox();
+        }
     }
     
     private void ApplicationExit(object sender, EventArgs e)
@@ -755,6 +819,8 @@ class SubForm : Form
 {
     public bool IsChanged { get; private set; }
     
+    private TabControl tabControl = new TabControl();
+    
     private DataGridView dataGridView1 = new DataGridView();
     private BindingList<Columns1> dataSource1 = new BindingList<Columns1>();
     private TextBox textBoxPath = new TextBox();
@@ -763,6 +829,11 @@ class SubForm : Form
     private BindingList<Columns2> dataSource2 = new BindingList<Columns2>();
     private TextBox textBoxExtension = new TextBox();
     private TextBox textBoxEditor = new TextBox();
+    
+    private DataGridView dataGridView3 = new DataGridView();
+    private BindingList<Columns3> dataSource3 = new BindingList<Columns3>();
+    private TextBox textBoxCmdName = new TextBox();
+    private TextBox textBoxCmdString = new TextBox();
     
     private CheckBox checkBoxTopMost = new CheckBox();
     private CheckBox checkBoxAutoTrim = new CheckBox();
@@ -778,7 +849,7 @@ class SubForm : Form
     {
         // フォーム
         this.Text = "設定";
-        this.Size = new Size(800, 700);
+        this.Size = new Size(800, 600);
         this.MaximizeBox = false;
         this.MinimizeBox = true;
         this.StartPosition = FormStartPosition.CenterScreen;
@@ -788,20 +859,22 @@ class SubForm : Form
         // ツールチップ
         var toolTip = new ToolTip();
         
-        // グループボックス1
-        var groupBox1 = new GroupBox();
-        groupBox1.Location = new Point(10, 10);
-        groupBox1.Size = new Size(775, 210);
-        groupBox1.FlatStyle = FlatStyle.Standard;
-        groupBox1.Text = "【検索フォルダ】";
-        this.Controls.Add(groupBox1);
+        // タブコントロール
+        tabControl.Location = new Point(10, 10);
+        tabControl.Size = new Size(775, 330);
+        this.Controls.Add(tabControl);
+        
+        // タブページ1
+        var tabPage1 = new TabPage();
+        tabPage1.Text = "検索フォルダ";
+        tabControl.TabPages.Add(tabPage1);
         
         // ラベル
-        groupBox1.Controls.Add(CreateLabel(10, 20, "検索対象のフォルダを指定します。先頭に指定したフォルダから順番に検索されます。Windowsフォルダは指定しても検索されません。"));
+        tabPage1.Controls.Add(CreateLabel(10, 10, "検索対象のフォルダを指定します。先頭に指定したフォルダから順番に検索されます。Windowsフォルダは指定しても検索されません。"));
         
         // データグリッドビュー1
-        dataGridView1.Location = new Point(10, 40);
-        dataGridView1.Size = new Size(755, 130);
+        dataGridView1.Location = new Point(10, 30);
+        dataGridView1.Size = new Size(750, 235);
         dataGridView1.DataSource = dataSource1;
         dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         dataGridView1.AllowUserToAddRows = false;
@@ -810,94 +883,91 @@ class SubForm : Form
         dataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         dataGridView1.CellPainting += CellPaintingDataGridView1;
         dataGridView1.CellDoubleClick += CellDoubleClickDataGridView1;
-        groupBox1.Controls.Add(dataGridView1);
+        tabPage1.Controls.Add(dataGridView1);
         
         // ラベル
-        groupBox1.Controls.Add(CreateLabel(10, 180, "フォルダ"));
+        tabPage1.Controls.Add(CreateLabel(10, 275, "フォルダ"));
         
         // テキストボックス（Path）
-        textBoxPath.Location = new Point(55, 180);
-        textBoxPath.Size = new Size(430, 20);
+        textBoxPath.Location = new Point(55, 275);
+        textBoxPath.Size = new Size(425, 20);
         textBoxPath.Text = string.Empty;
-        groupBox1.Controls.Add(textBoxPath);
+        tabPage1.Controls.Add(textBoxPath);
         
         // 参照ボタン1
         var buttonRef1 = new Button();
-        buttonRef1.Location = new Point(495, 180);
+        buttonRef1.Location = new Point(490, 275);
         buttonRef1.Size = new Size(40, 20);
         buttonRef1.Text = "参照";
         buttonRef1.Click += ClickButtonRef1;
         toolTip.SetToolTip(buttonRef1, "検索フォルダの選択ダイアログを表示します。");
-        groupBox1.Controls.Add(buttonRef1);
+        tabPage1.Controls.Add(buttonRef1);
         
         // 追加ボタン1
         var buttonAdd1 = new Button();
-        buttonAdd1.Location = new Point(540, 180);
+        buttonAdd1.Location = new Point(535, 275);
         buttonAdd1.Size = new Size(40, 20);
         buttonAdd1.Text = "追加";
         buttonAdd1.Click += ClickButtonAdd1;
         toolTip.SetToolTip(buttonAdd1, "入力した情報を一覧に追加します。");
-        groupBox1.Controls.Add(buttonAdd1);
+        tabPage1.Controls.Add(buttonAdd1);
         
         // 更新ボタン1
         var buttonMod1 = new Button();
-        buttonMod1.Location = new Point(585, 180);
+        buttonMod1.Location = new Point(580, 275);
         buttonMod1.Size = new Size(40, 20);
         buttonMod1.Text = "更新";
         buttonMod1.Click += ClickButtonMod1;
         toolTip.SetToolTip(buttonMod1, "一覧の選択行を入力した情報で更新します。");
-        groupBox1.Controls.Add(buttonMod1);
+        tabPage1.Controls.Add(buttonMod1);
         
         // 削除ボタン1
         var buttonDel1 = new Button();
-        buttonDel1.Location = new Point(630, 180);
+        buttonDel1.Location = new Point(625, 275);
         buttonDel1.Size = new Size(40, 20);
         buttonDel1.Text = "削除";
         buttonDel1.Click += ClickButtonDel1;
         toolTip.SetToolTip(buttonDel1, "一覧の選択行を削除します。");
-        groupBox1.Controls.Add(buttonDel1);
+        tabPage1.Controls.Add(buttonDel1);
         
         // 無効ボタン1
         var buttonDis1 = new Button();
-        buttonDis1.Location = new Point(675, 180);
+        buttonDis1.Location = new Point(670, 275);
         buttonDis1.Size = new Size(40, 20);
         buttonDis1.Text = "無効";
         buttonDis1.Click += ClickButtonDis1;
         toolTip.SetToolTip(buttonDis1, "一覧の選択行を無効にします。既に無効の場合は有効にします。");
-        groupBox1.Controls.Add(buttonDis1);
+        tabPage1.Controls.Add(buttonDis1);
         
         // ↑ボタン1
         var buttonUp1 = new Button();
-        buttonUp1.Location = new Point(720, 180);
+        buttonUp1.Location = new Point(715, 275);
         buttonUp1.Size = new Size(20, 20);
         buttonUp1.Text = "↑";
         buttonUp1.Click += ClickButtonUp1;
         toolTip.SetToolTip(buttonUp1, "一覧の選択行を上に移動します。");
-        groupBox1.Controls.Add(buttonUp1);
+        tabPage1.Controls.Add(buttonUp1);
         
         // ↓ボタン1
         var buttonDown1 = new Button();
-        buttonDown1.Location = new Point(745, 180);
+        buttonDown1.Location = new Point(740, 275);
         buttonDown1.Size = new Size(20, 20);
         buttonDown1.Text = "↓";
         buttonDown1.Click += ClickButtonDown1;
         toolTip.SetToolTip(buttonDown1, "一覧の選択行を下に移動します。");
-        groupBox1.Controls.Add(buttonDown1);
+        tabPage1.Controls.Add(buttonDown1);
         
-        // グループボックス2
-        var groupBox2 = new GroupBox();
-        groupBox2.Location = new Point(10, 230);
-        groupBox2.Size = new Size(775, 210);
-        groupBox2.FlatStyle = FlatStyle.Standard;
-        groupBox2.Text = "【拡張子／エディタ指定】";
-        this.Controls.Add(groupBox2);
+        // タブページ2
+        var tabPage2 = new TabPage();
+        tabPage2.Text = "拡張子／エディタ指定";
+        tabControl.TabPages.Add(tabPage2);
         
         // ラベル
-        groupBox2.Controls.Add(CreateLabel(10, 20, "検索対象のファイルの拡張子及び使用するエディタを指定します。エディタが指定されていない場合は既定のアプリケーションを使用します。"));
+        tabPage2.Controls.Add(CreateLabel(10, 10, "検索対象のファイルの拡張子及び使用するエディタを指定します。エディタが指定されていない場合は既定のアプリケーションを使用します。"));
         
         // データグリッドビュー2
-        dataGridView2.Location = new Point(10, 40);
-        dataGridView2.Size = new Size(755, 130);
+        dataGridView2.Location = new Point(10, 30);
+        dataGridView2.Size = new Size(750, 235);
         dataGridView2.DataSource = dataSource2;
         dataGridView2.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         dataGridView2.AllowUserToAddRows = false;
@@ -906,124 +976,235 @@ class SubForm : Form
         dataGridView2.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         dataGridView2.CellPainting += CellPaintingDataGridView2;
         dataGridView2.CellDoubleClick += CellDoubleClickDataGridView2;
-        groupBox2.Controls.Add(dataGridView2);
+        tabPage2.Controls.Add(dataGridView2);
         
         // ラベル
-        groupBox2.Controls.Add(CreateLabel(10, 180, "拡張子"));
+        tabPage2.Controls.Add(CreateLabel(10, 275, "拡張子"));
         
         // テキストボックス（Extension）
-        textBoxExtension.Location = new Point(55, 180);
+        textBoxExtension.Location = new Point(55, 275);
         textBoxExtension.Size = new Size(60, 20);
         textBoxExtension.Text = string.Empty;
-        groupBox2.Controls.Add(textBoxExtension);
+        tabPage2.Controls.Add(textBoxExtension);
         
         // ラベル
-        groupBox2.Controls.Add(CreateLabel(125, 180, "エディタ"));
+        tabPage2.Controls.Add(CreateLabel(125, 275, "エディタ"));
         
         // テキストボックス（Editor）
-        textBoxEditor.Location = new Point(170, 180);
-        textBoxEditor.Size = new Size(315, 20);
+        textBoxEditor.Location = new Point(170, 275);
+        textBoxEditor.Size = new Size(310, 20);
         textBoxEditor.Text = string.Empty;
-        groupBox2.Controls.Add(textBoxEditor);
+        tabPage2.Controls.Add(textBoxEditor);
         
         // 参照ボタン2
         var buttonRef2 = new Button();
-        buttonRef2.Location = new Point(495, 180);
+        buttonRef2.Location = new Point(490, 275);
         buttonRef2.Size = new Size(40, 20);
         buttonRef2.Text = "参照";
         buttonRef2.Click += ClickButtonRef2;
         toolTip.SetToolTip(buttonRef2, "使用するエディタの選択ダイアログを表示します。");
-        groupBox2.Controls.Add(buttonRef2);
+        tabPage2.Controls.Add(buttonRef2);
         
         // 追加ボタン2
         var buttonAdd2 = new Button();
-        buttonAdd2.Location = new Point(540, 180);
+        buttonAdd2.Location = new Point(535, 275);
         buttonAdd2.Size = new Size(40, 20);
         buttonAdd2.Text = "追加";
         buttonAdd2.Click += ClickButtonAdd2;
         toolTip.SetToolTip(buttonAdd2, "入力した情報を一覧に追加します。");
-        groupBox2.Controls.Add(buttonAdd2);
+        tabPage2.Controls.Add(buttonAdd2);
         
         // 更新ボタン2
         var buttonMod2 = new Button();
-        buttonMod2.Location = new Point(585, 180);
+        buttonMod2.Location = new Point(580, 275);
         buttonMod2.Size = new Size(40, 20);
         buttonMod2.Text = "更新";
         buttonMod2.Click += ClickButtonMod2;
         toolTip.SetToolTip(buttonMod2, "一覧の選択行を入力した情報で更新します。");
-        groupBox2.Controls.Add(buttonMod2);
+        tabPage2.Controls.Add(buttonMod2);
         
         // 削除ボタン2
         var buttonDel2 = new Button();
-        buttonDel2.Location = new Point(630, 180);
+        buttonDel2.Location = new Point(625, 275);
         buttonDel2.Size = new Size(40, 20);
         buttonDel2.Text = "削除";
         buttonDel2.Click += ClickButtonDel2;
         toolTip.SetToolTip(buttonDel2, "一覧の選択行を削除します。");
-        groupBox2.Controls.Add(buttonDel2);
+        tabPage2.Controls.Add(buttonDel2);
         
         // 無効ボタン2
         var buttonDis2 = new Button();
-        buttonDis2.Location = new Point(675, 180);
+        buttonDis2.Location = new Point(670, 275);
         buttonDis2.Size = new Size(40, 20);
         buttonDis2.Text = "無効";
         buttonDis2.Click += ClickButtonDis2;
         toolTip.SetToolTip(buttonDis2, "一覧の選択行を無効にします。既に無効の場合は有効にします。");
-        groupBox2.Controls.Add(buttonDis2);
+        tabPage2.Controls.Add(buttonDis2);
         
         // ↑ボタン2
         var buttonUp2 = new Button();
-        buttonUp2.Location = new Point(720, 180);
+        buttonUp2.Location = new Point(715, 275);
         buttonUp2.Size = new Size(20, 20);
         buttonUp2.Text = "↑";
         buttonUp2.Click += ClickButtonUp2;
         toolTip.SetToolTip(buttonUp2, "一覧の選択行を上に移動します。");
-        groupBox2.Controls.Add(buttonUp2);
+        tabPage2.Controls.Add(buttonUp2);
         
         // ↓ボタン2
         var buttonDown2 = new Button();
-        buttonDown2.Location = new Point(745, 180);
+        buttonDown2.Location = new Point(740, 275);
         buttonDown2.Size = new Size(20, 20);
         buttonDown2.Text = "↓";
         buttonDown2.Click += ClickButtonDown2;
         toolTip.SetToolTip(buttonDown2, "一覧の選択行を下に移動します。");
-        groupBox2.Controls.Add(buttonDown2);
+        tabPage2.Controls.Add(buttonDown2);
         
-        // グループボックス3
-        var groupBox3 = new GroupBox();
-        groupBox3.Location = new Point(10, 450);
-        groupBox3.Size = new Size(775, 170);
-        groupBox3.FlatStyle = FlatStyle.Standard;
-        groupBox3.Text = "【その他】";
-        this.Controls.Add(groupBox3);
+        // タブページ3
+        var tabPage3 = new TabPage();
+        tabPage3.Text = "コマンド生成";
+        tabControl.TabPages.Add(tabPage3);
+        
+        // ラベル
+        tabPage3.Controls.Add(CreateLabel(10, 10, "外部アプリケーションを実行するためのコマンドの名前と内容を指定します。詳細については「ヘルプ」ボタンをクリックしてください。"));
+        
+        // ヘルプ
+        var buttonHelp = new Button();
+        buttonHelp.Location = new Point(710, 5);
+        buttonHelp.Size = new Size(50, 20);
+        buttonHelp.Text = "ヘルプ";
+        buttonHelp.Click += ClickButtonHelp;
+        toolTip.SetToolTip(buttonHelp, "コマンド生成のヘルプを表示します。");
+        tabPage3.Controls.Add(buttonHelp);
+        
+        // データグリッドビュー3
+        dataGridView3.Location = new Point(10, 30);
+        dataGridView3.Size = new Size(750, 235);
+        dataGridView3.DataSource = dataSource3;
+        dataGridView3.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        dataGridView3.AllowUserToAddRows = false;
+        dataGridView3.MultiSelect = false;
+        dataGridView3.ReadOnly = true;
+        dataGridView3.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        dataGridView3.CellPainting += CellPaintingDataGridView3;
+        dataGridView3.CellDoubleClick += CellDoubleClickDataGridView3;
+        tabPage3.Controls.Add(dataGridView3);
+        
+        // ラベル
+        tabPage3.Controls.Add(CreateLabel(10, 275, "名前"));
+        
+        // テキストボックス（CmdName）
+        textBoxCmdName.Location = new Point(45, 275);
+        textBoxCmdName.Size = new Size(60, 20);
+        textBoxCmdName.Text = string.Empty;
+        tabPage3.Controls.Add(textBoxCmdName);
+        
+        // ラベル
+        tabPage3.Controls.Add(CreateLabel(115, 275, "内容"));
+        
+        // テキストボックス（CmdString）
+        textBoxCmdString.Location = new Point(150, 275);
+        textBoxCmdString.Size = new Size(330, 20);
+        textBoxCmdString.Text = string.Empty;
+        tabPage3.Controls.Add(textBoxCmdString);
+        
+        // 参照ボタン3
+        var buttonRef3 = new Button();
+        buttonRef3.Location = new Point(490, 275);
+        buttonRef3.Size = new Size(40, 20);
+        buttonRef3.Text = "参照";
+        buttonRef3.Click += ClickButtonRef3;
+        toolTip.SetToolTip(buttonRef3, "使用する外部アプリケーションの選択ダイアログを表示します。");
+        tabPage3.Controls.Add(buttonRef3);
+        
+        // 追加ボタン3
+        var buttonAdd3 = new Button();
+        buttonAdd3.Location = new Point(535, 275);
+        buttonAdd3.Size = new Size(40, 20);
+        buttonAdd3.Text = "追加";
+        buttonAdd3.Click += ClickButtonAdd3;
+        toolTip.SetToolTip(buttonAdd3, "入力した情報を一覧に追加します。");
+        tabPage3.Controls.Add(buttonAdd3);
+        
+        // 更新ボタン3
+        var buttonMod3 = new Button();
+        buttonMod3.Location = new Point(580, 275);
+        buttonMod3.Size = new Size(40, 20);
+        buttonMod3.Text = "更新";
+        buttonMod3.Click += ClickButtonMod3;
+        toolTip.SetToolTip(buttonMod3, "一覧の選択行を入力した情報で更新します。");
+        tabPage3.Controls.Add(buttonMod3);
+        
+        // 削除ボタン3
+        var buttonDel3 = new Button();
+        buttonDel3.Location = new Point(625, 275);
+        buttonDel3.Size = new Size(40, 20);
+        buttonDel3.Text = "削除";
+        buttonDel3.Click += ClickButtonDel3;
+        toolTip.SetToolTip(buttonDel3, "一覧の選択行を削除します。");
+        tabPage3.Controls.Add(buttonDel3);
+        
+        // 無効ボタン3
+        var buttonDis3 = new Button();
+        buttonDis3.Location = new Point(670, 275);
+        buttonDis3.Size = new Size(40, 20);
+        buttonDis3.Text = "無効";
+        buttonDis3.Click += ClickButtonDis3;
+        toolTip.SetToolTip(buttonDis3, "一覧の選択行を無効にします。既に無効の場合は有効にします。");
+        tabPage3.Controls.Add(buttonDis3);
+        
+        // ↑ボタン3
+        var buttonUp3 = new Button();
+        buttonUp3.Location = new Point(715, 275);
+        buttonUp3.Size = new Size(20, 20);
+        buttonUp3.Text = "↑";
+        buttonUp3.Click += ClickButtonUp3;
+        toolTip.SetToolTip(buttonUp3, "一覧の選択行を上に移動します。");
+        tabPage3.Controls.Add(buttonUp3);
+        
+        // ↓ボタン3
+        var buttonDown3 = new Button();
+        buttonDown3.Location = new Point(740, 275);
+        buttonDown3.Size = new Size(20, 20);
+        buttonDown3.Text = "↓";
+        buttonDown3.Click += ClickButtonDown3;
+        toolTip.SetToolTip(buttonDown3, "一覧の選択行を下に移動します。");
+        tabPage3.Controls.Add(buttonDown3);
+        
+        // グループボックス
+        var groupBox = new GroupBox();
+        groupBox.Location = new Point(10, 350);
+        groupBox.Size = new Size(773, 170);
+        groupBox.FlatStyle = FlatStyle.Standard;
+        groupBox.Text = "動作指定";
+        this.Controls.Add(groupBox);
         
         // チェックボックス（Topmost）
         checkBoxTopMost.Text = "フォームを常に手前に表示する";
         checkBoxTopMost.Location = new Point(10, 20);
         checkBoxTopMost.AutoSize = true;
         checkBoxTopMost.Checked = false;
-        groupBox3.Controls.Add(checkBoxTopMost);
+        groupBox.Controls.Add(checkBoxTopMost);
         
         // チェックボックス（AutoTrim）
         checkBoxAutoTrim.Text = "フォームに入力したファイル名の前後に空白が含まれている場合は自動で削除する";
         checkBoxAutoTrim.Location = new Point(10, 45);
         checkBoxAutoTrim.AutoSize = true;
         checkBoxAutoTrim.Checked = false;
-        groupBox3.Controls.Add(checkBoxAutoTrim);
+        groupBox.Controls.Add(checkBoxAutoTrim);
         
         // チェックボックス（Minimize）
         checkBoxMinimize.Text = "ファイルを開くと同時に自動でフォームを最小化する";
         checkBoxMinimize.Location = new Point(10, 70);
         checkBoxMinimize.AutoSize = true;
         checkBoxMinimize.Checked = false;
-        groupBox3.Controls.Add(checkBoxMinimize);
+        groupBox.Controls.Add(checkBoxMinimize);
         
         // チェックボックス（Parallel）
         checkBoxParallel.Text = "ファイルの検索処理を検索フォルダごとに並列に処理する (処理速度が向上する場合があります)";
         checkBoxParallel.Location = new Point(10, 95);
         checkBoxParallel.AutoSize = true;
         checkBoxParallel.Checked = false;
-        groupBox3.Controls.Add(checkBoxParallel);
+        groupBox.Controls.Add(checkBoxParallel);
         
         // チェックボックス（Lookahead）
         checkBoxLookahead.Text = "アプリケーション起動時に検索フォルダに格納されているファイルの一覧を先読みしてメモリに記憶する";
@@ -1031,18 +1212,18 @@ class SubForm : Form
         checkBoxLookahead.AutoSize = true;
         checkBoxLookahead.Checked = false;
         checkBoxLookahead.CheckedChanged += CheckedChangedCheckBoxLookahead;
-        groupBox3.Controls.Add(checkBoxLookahead);
+        groupBox.Controls.Add(checkBoxLookahead);
         
         // チェックボックス（Tasktray）
         checkBoxTaskTray.Text = "アプリケーション起動時にタスクトレイに常駐する (次回アプリケーション起動時に有効となります)";
         checkBoxTaskTray.Location = new Point(10, 145);
         checkBoxTaskTray.AutoSize = true;
         checkBoxTaskTray.Checked = false;
-        groupBox3.Controls.Add(checkBoxTaskTray);
+        groupBox.Controls.Add(checkBoxTaskTray);
         
         // ラベル（HotKey）
         var labelHotKey = new Label();
-        labelHotKey.Location = new Point(20, 630);
+        labelHotKey.Location = new Point(20, 530);
         labelHotKey.Size = new Size(100, 20);
         labelHotKey.Text = "ショートカットキー";
         labelHotKey.BorderStyle = BorderStyle.Fixed3D;
@@ -1050,7 +1231,7 @@ class SubForm : Form
         this.Controls.Add(labelHotKey);
         
         // テキストボックス（HotKey）
-        textBoxHotKey.Location = new Point(130, 630);
+        textBoxHotKey.Location = new Point(130, 530);
         textBoxHotKey.Size = new Size(160, 20);
         textBoxHotKey.Text = string.Empty;
         textBoxHotKey.TextAlign = HorizontalAlignment.Center;
@@ -1058,11 +1239,12 @@ class SubForm : Form
         textBoxHotKey.BackColor = SystemColors.Window;
         textBoxHotKey.ShortcutsEnabled = false;
         textBoxHotKey.PreviewKeyDown += PreviewKeyDownTextBoxHotKey;
+        toolTip.SetToolTip(textBoxHotKey, "アプリケーションをアクティブにするショートカットキーを設定します。");
         this.Controls.Add(textBoxHotKey);
         
         // 保存ボタン
         var buttonSave = new Button();
-        buttonSave.Location = new Point(650, 630);
+        buttonSave.Location = new Point(650, 530);
         buttonSave.Size = new Size(60, 30);
         buttonSave.Text = "保存";
         buttonSave.Click += ClickButtonSave;
@@ -1071,7 +1253,7 @@ class SubForm : Form
         
         // 中止ボタン
         var buttonCancel  = new Button();
-        buttonCancel.Location = new Point(720, 630);
+        buttonCancel.Location = new Point(720, 530);
         buttonCancel.Size = new Size(60, 30);
         buttonCancel.Text = "中止";
         buttonCancel.Click += ClickButtonCancel;
@@ -1103,6 +1285,18 @@ class SubForm : Form
         public bool Disable { get; set; }
     }
     
+    private class Columns3
+    {
+        [DisplayName("名前")]
+        public string CmdName { get; set; }
+        
+        [DisplayName("内容")]
+        public string CmdString { get; set; }
+        
+        [Browsable(false)]
+        public bool Disable { get; set; }
+    }
+    
     private Label CreateLabel(int x, int y, string text)
     {
         var label = new Label();
@@ -1115,13 +1309,22 @@ class SubForm : Form
     
     private void FormLoad(object sender, EventArgs e)
     {
-        foreach(DataGridViewRow row in dataGridView1.Rows)
+        tabControl.SelectedIndex = 2;
+        dataGridView3.AutoResizeColumn(0, DataGridViewAutoSizeColumnMode.AllCells);
+        foreach(DataGridViewRow row in dataGridView3.Rows)
         {
-            SetStrikeoutDataGridView1(row.Index);
+            SetStrikeoutDataGridView3(row.Index);
         }
+        tabControl.SelectedIndex = 1;
+        dataGridView2.AutoResizeColumn(0, DataGridViewAutoSizeColumnMode.AllCells);
         foreach(DataGridViewRow row in dataGridView2.Rows)
         {
             SetStrikeoutDataGridView2(row.Index);
+        }
+        tabControl.SelectedIndex = 0;
+        foreach(DataGridViewRow row in dataGridView1.Rows)
+        {
+            SetStrikeoutDataGridView1(row.Index);
         }
     }
     
@@ -1133,6 +1336,11 @@ class SubForm : Form
     private void SetStrikeoutDataGridView2(int index)
     {
         SetFontStyleStrikeout(dataGridView2, index, dataSource2[index].Disable);
+    }
+    
+    private void SetStrikeoutDataGridView3(int index)
+    {
+        SetFontStyleStrikeout(dataGridView3, index, dataSource3[index].Disable);
     }
     
     private void SetFontStyleStrikeout(DataGridView dataGridView, int index, bool disable)
@@ -1168,6 +1376,14 @@ class SubForm : Form
         }
     }
     
+    private void CellPaintingDataGridView3(object sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if(e.RowIndex >= 0 && e.ColumnIndex < 0)
+        {
+            CellPaintingRowIndex(e);
+        }
+    }
+    
     private void CellPaintingRowIndex(DataGridViewCellPaintingEventArgs e)
     {
         e.Paint(e.ClipBounds, DataGridViewPaintParts.All);
@@ -1192,7 +1408,7 @@ class SubForm : Form
     
     private void CellDoubleClickDataGridView1(object sender, DataGridViewCellEventArgs e)
     {
-        if(dataGridView1.CurrentCell != null)
+        if(dataGridView1.CurrentCell != null && e.RowIndex != -1)
         {
             var row = dataSource1[dataGridView1.CurrentCell.RowIndex];
             textBoxPath.Text = row.Path;
@@ -1204,7 +1420,10 @@ class SubForm : Form
         using(var dialog = new FolderBrowserDialog())
         {
             dialog.Description = "検索フォルダを指定してください。";
-            dialog.SelectedPath = textBoxPath.Text;
+            if(Directory.Exists(textBoxPath.Text))
+            {
+                dialog.SelectedPath = textBoxPath.Text;
+            }
             dialog.ShowNewFolderButton = false;
             if(dialog.ShowDialog() == DialogResult.OK)
             {
@@ -1316,7 +1535,7 @@ class SubForm : Form
     
     private void CellDoubleClickDataGridView2(object sender, DataGridViewCellEventArgs e)
     {
-        if(dataGridView2.CurrentCell != null)
+        if(dataGridView2.CurrentCell != null && e.RowIndex != -1)
         {
             var row = dataSource2[dataGridView2.CurrentCell.RowIndex];
             textBoxExtension.Text = row.Extension;
@@ -1329,7 +1548,10 @@ class SubForm : Form
         using(var dialog = new OpenFileDialog())
         {
             dialog.Title = "使用するアプリケーションを指定してください。";
-            dialog.InitialDirectory = textBoxEditor.Text;
+            if(File.Exists(textBoxEditor.Text))
+            {
+                dialog.InitialDirectory = Path.GetDirectoryName(textBoxEditor.Text);
+            }
             dialog.Filter = "すべてのファイル (*.*)|*.*|アプリケーション (*.exe)|*.exe";
             dialog.FilterIndex = 2;
             if(dialog.ShowDialog() == DialogResult.OK)
@@ -1444,6 +1666,155 @@ class SubForm : Form
         }
     }
     
+    private void CellDoubleClickDataGridView3(object sender, DataGridViewCellEventArgs e)
+    {
+        if(dataGridView3.CurrentCell != null && e.RowIndex != -1)
+        {
+            var row = dataSource3[dataGridView3.CurrentCell.RowIndex];
+            textBoxCmdName.Text = row.CmdName;
+            textBoxCmdString.Text = row.CmdString;
+        }
+    }
+    
+    private void ClickButtonHelp(object sender, EventArgs e)
+    {
+        MessageBox.Show(@"フォームにコマンドの名前及び引数を入力することで外部アプリケーションを実行することができます。例「grep keyword」" + Environment.NewLine
+                      + @"実行する外部アプリケーションは設定画面のコマンドの内容に指定します。" + Environment.NewLine
+                      + @"コマンドの内容に入力された以下の制御文字は外部アプリケーション実行時に特定の文字列に置換されます。" + Environment.NewLine
+                      + @"{\0} : フォームに入力された引数に置換されます。" + Environment.NewLine
+                      + @"{\1} - {\100} : 該当する番号の検索フォルダに置換されます。"
+                      , "コマンド生成", MessageBoxButtons.OK, MessageBoxIcon.Question);
+    }
+    
+    private void ClickButtonRef3(object sender, EventArgs e)
+    {
+        using(var dialog = new OpenFileDialog())
+        {
+            dialog.Title = "使用するアプリケーションを指定してください。";
+            if(File.Exists(textBoxCmdString.Text))
+            {
+                dialog.InitialDirectory = Path.GetDirectoryName(textBoxCmdString.Text);
+            }
+            dialog.Filter = "すべてのファイル (*.*)|*.*|アプリケーション (*.exe)|*.exe";
+            dialog.FilterIndex = 2;
+            if(dialog.ShowDialog() == DialogResult.OK)
+            {
+                textBoxCmdString.Text = dialog.FileName;
+            }
+        }
+    }
+    
+    private bool CheckDataGridView3()
+    {
+        if(String.IsNullOrWhiteSpace(textBoxCmdName.Text))
+        {
+            MessageBox.Show("コマンドの名前を入力してください。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            textBoxCmdName.Select();
+            return false;
+        }
+        if(textBoxCmdName.Text.Contains(" "))
+        {
+            MessageBox.Show("コマンドの名前に空白は入力できません。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            textBoxCmdName.Select();
+            return false;
+        }
+        if(String.IsNullOrWhiteSpace(textBoxCmdString.Text))
+        {
+            MessageBox.Show("コマンドの内容を入力してください。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            textBoxCmdString.Select();
+            return false;
+        }
+        if(dataSource3.Count >= 100)
+        {
+            MessageBox.Show("指定できる件数の上限を超過しました。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return false;
+        }
+        return true;
+    }
+    
+    private void ClickButtonAdd3(object sender, EventArgs e)
+    {
+        if(CheckDataGridView3())
+        {
+            var row = new Columns3();
+            row.CmdName = textBoxCmdName.Text;
+            row.CmdString = textBoxCmdString.Text;
+            dataSource3.Add(row);
+            dataGridView3.CurrentCell = dataGridView3[0, dataGridView3.RowCount - 1];
+            textBoxCmdName.Text = string.Empty;
+            textBoxCmdString.Text = string.Empty;
+            textBoxCmdName.Select();
+        }
+    }
+    
+    private void ClickButtonMod3(object sender, EventArgs e)
+    {
+        if(dataGridView3.CurrentCell != null && CheckDataGridView3())
+        {
+            var row = dataSource3[dataGridView3.CurrentCell.RowIndex];
+            row.CmdName = textBoxCmdName.Text;
+            row.CmdString = textBoxCmdString.Text;
+            dataGridView3.Refresh();
+            textBoxCmdName.Text = string.Empty;
+            textBoxCmdString.Text = string.Empty;
+        }
+    }
+    
+    private void ClickButtonDel3(object sender, EventArgs e)
+    {
+        if(dataGridView3.CurrentCell != null)
+        {
+            var index = dataGridView3.CurrentCell.RowIndex;
+            if(dataGridView3.CurrentCell.RowIndex > 0)
+            {
+                dataGridView3.CurrentCell = dataGridView3[0, dataGridView3.CurrentCell.RowIndex - 1];
+            }
+            dataSource3.RemoveAt(index);
+        }
+    }
+    
+    private void ClickButtonDis3(object sender, EventArgs e)
+    {
+        if(dataGridView3.CurrentCell != null)
+        {
+            var row = dataSource3[dataGridView3.CurrentCell.RowIndex];
+            row.Disable = !row.Disable;
+            SetStrikeoutDataGridView3(dataGridView3.CurrentCell.RowIndex);
+        }
+    }
+    
+    private void ClickButtonUp3(object sender, EventArgs e)
+    {
+        if(dataGridView3.CurrentCell != null)
+        {
+            if(dataGridView3.CurrentCell.RowIndex > 0)
+            {
+                var row = dataSource3[dataGridView3.CurrentCell.RowIndex];
+                dataSource3[dataGridView3.CurrentCell.RowIndex] = dataSource3[dataGridView3.CurrentCell.RowIndex - 1];
+                dataSource3[dataGridView3.CurrentCell.RowIndex - 1] = row;
+                SetStrikeoutDataGridView3(dataGridView3.CurrentCell.RowIndex);
+                SetStrikeoutDataGridView3(dataGridView3.CurrentCell.RowIndex - 1);
+                dataGridView3.CurrentCell = dataGridView3[0, dataGridView3.CurrentCell.RowIndex - 1];
+            }
+        }
+    }
+    
+    private void ClickButtonDown3(object sender, EventArgs e)
+    {
+        if(dataGridView3.CurrentCell != null)
+        {
+            if(dataGridView3.CurrentCell.RowIndex < dataGridView3.RowCount - 1)
+            {
+                var row = dataSource3[dataGridView3.CurrentCell.RowIndex];
+                dataSource3[dataGridView3.CurrentCell.RowIndex] = dataSource3[dataGridView3.CurrentCell.RowIndex + 1];
+                dataSource3[dataGridView3.CurrentCell.RowIndex + 1] = row;
+                SetStrikeoutDataGridView3(dataGridView3.CurrentCell.RowIndex);
+                SetStrikeoutDataGridView3(dataGridView3.CurrentCell.RowIndex + 1);
+                dataGridView3.CurrentCell = dataGridView3[0, dataGridView3.CurrentCell.RowIndex + 1];
+            }
+        }
+    }
+    
     private void CheckedChangedCheckBoxLookahead(object sender, EventArgs e)
     {
         IsChanged = true;
@@ -1533,6 +1904,11 @@ class SubForm : Form
         {
             config.AddEditor(data.Extension, data.Editor, data.Disable);
         }
+        config.ClearCommand();
+        foreach(var data in dataSource3)
+        {
+            config.AddCommand(data.CmdName, data.CmdString, data.Disable);
+        }
         config.TopMost = checkBoxTopMost.Checked;
         config.AutoTrim = checkBoxAutoTrim.Checked;
         config.Parallel = checkBoxParallel.Checked;
@@ -1568,6 +1944,14 @@ class SubForm : Form
             row2.Disable = editor.Disable;
             dataSource2.Add(row2);
         }
+        foreach(var command in config.Command)
+        {
+            var row3 = new Columns3();
+            row3.CmdName = command.Attribute;
+            row3.CmdString = command.Value;
+            row3.Disable = command.Disable;
+            dataSource3.Add(row3);
+        }
         checkBoxTopMost.Checked = config.TopMost;
         checkBoxAutoTrim.Checked = config.AutoTrim;
         checkBoxParallel.Checked = config.Parallel;
@@ -1594,13 +1978,14 @@ class Config
     public int Count { get; set; }
     public bool TopMost { get; set; }
     public bool AutoTrim { get; set; }
-    public bool Parallel { get; set; }
     public bool Minimize { get; set; }
+    public bool Parallel { get; set; }
     public bool Lookahead { get; set; }
     public bool TaskTray { get; set; }
     public Keys HotKey { get; set; }
     public List<Element> Path { get; set; }
     public List<Element> Editor { get; set; }
+    public List<Element> Command { get; set; }
     public List<Element> History { get; set; }
     
     public Config()
@@ -1638,6 +2023,7 @@ class Config
         HotKey = GetKeysValue(xml, "hotkey");
         Path = GetListValue(xml, "path");
         Editor = GetListValue(xml, "editor", "extension");
+        Command = GetListValue(xml, "command", "name");
         History = GetListValue(xml, "history");
     }
     
@@ -1658,6 +2044,7 @@ class Config
         SetElementValue(xml, "hotkey", HotKey);
         SetElementValue(xml, "path", Path);
         SetElementValue(xml, "editor", "extension", Editor);
+        SetElementValue(xml, "command", "name", Command);
         SetElementValue(xml, "history", History);
         xml.Save(FileName);
     }
@@ -1670,6 +2057,11 @@ class Config
     public void ClearEditor()
     {
         Editor = new List<Element>();
+    }
+    
+    public void ClearCommand()
+    {
+        Command = new List<Element>();
     }
     
     public void ClearHistory()
@@ -1685,6 +2077,11 @@ class Config
     public void AddEditor(string attribute, string val, bool disable)
     {
         Editor.Add(ConvertElement(attribute, val, disable));
+    }
+    
+    public void AddCommand(string attribute, string val, bool disable)
+    {
+        Command.Add(ConvertElement(attribute, val, disable));
     }
     
     public void AddHistory(string val)
@@ -1725,7 +2122,8 @@ class Config
                     new XElement("tasktray", "False"),
                     new XElement("hotkey", "None"),
                     new XElement("path", Environment.GetFolderPath(Environment.SpecialFolder.Personal)),
-                    new XElement("editor", @"C:\Windows\notepad.exe", new XAttribute("extension", "txt"))
+                    new XElement("editor", @"C:\Windows\notepad.exe", new XAttribute("extension", "txt")),
+                    new XElement("command", @"powershell.exe -NoExit Get-ChildItem {\1}\*.txt -Recurse | Select-String ""{\0}""", new XAttribute("name", "grep"))
                 )
             );
             xml.Save(FileName);
