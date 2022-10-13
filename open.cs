@@ -209,12 +209,12 @@ class MainForm : Form
     {
         var result = false;
         var name = string.Empty;
-        var args = string.Empty;
+        var para = string.Empty;
         var pos = text.IndexOf(' ');
         if(pos > 0)
         {
             name = text.Substring(0, pos);
-            args = text.Substring(pos + 1).TrimStart();
+            para = text.Substring(pos + 1).TrimStart();
         }
         else
         {
@@ -223,12 +223,12 @@ class MainForm : Form
         var config = new Config();
         foreach(var command in config.Command.Where(c => !c.Disable && !String.IsNullOrWhiteSpace(c.Attribute)).ToList())
         {
-            if(command.Attribute == name)
+            if(name == command.Attribute)
             {
                 var execute = command.Value.Trim();
-                if(!String.IsNullOrWhiteSpace(args))
+                if(!String.IsNullOrWhiteSpace(para))
                 {
-                    execute = execute.Replace(@"{\0}", args);
+                    execute = execute.Replace(@"{\0}", para);
                 }
                 for(var i = 0; i < config.Path.Count; i++)
                 {
@@ -237,16 +237,42 @@ class MainForm : Form
                         execute = execute.Replace(@"{\" + (i + 1).ToString() + "}", config.Path[i].Value);
                     }
                 }
-                pos = execute.IndexOf(' ');
-                try
+                var path = string.Empty;
+                var args = string.Empty;
+                for(var i = 0; i < execute.Length; i++)
                 {
+                    if(File.Exists(execute.Substring(0, i + 1)))
+                    {
+                        path = execute.Substring(0, i + 1);
+                        if(i + 1 < execute.Length)
+                        {
+                            args = execute.Substring(i + 1).TrimStart();
+                        }
+                        break;
+                    }
+                }
+                if(String.IsNullOrWhiteSpace(path))
+                {
+                    pos = execute.IndexOf(' ');
                     if(pos > 0)
                     {
-                        Process.Start(execute.Substring(0, pos), execute.Substring(pos + 1).TrimStart());
+                        path = execute.Substring(0, pos + 1);
+                        args = execute.Substring(pos + 1).TrimStart();
                     }
                     else
                     {
-                        Process.Start(execute);
+                        path = execute;
+                    }
+                }
+                try
+                {
+                    if(String.IsNullOrWhiteSpace(args))
+                    {
+                        Process.Start(path);
+                    }
+                    else
+                    {
+                        Process.Start(path, args);
                     }
                     result = true;
                 }
