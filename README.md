@@ -1,4 +1,4 @@
-# OPEN
+# ![OPEN](app.ico) OPEN
 
 ## 概要
 
