@@ -14,14 +14,14 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml.Linq;
 
-[assembly: AssemblyVersion("3.0.0.0")]
-[assembly: AssemblyFileVersion ("3.0.0.0")]
-[assembly: AssemblyInformationalVersion("3.0")]
+[assembly: AssemblyVersion("3.1.0.0")]
+[assembly: AssemblyFileVersion ("3.1.0.0")]
+[assembly: AssemblyInformationalVersion("3.1")]
 [assembly: AssemblyTitle("")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyProduct("OPEN")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyCopyright("Copyright (c) 2022 m-owada.")]
+[assembly: AssemblyCopyright("Copyright (c) 2024 m-owada.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -31,7 +31,7 @@ class Program
     static void Main()
     {
         bool createdNew;
-        var mutex = new Mutex(true, @"Global\OPEN_COPYRIGHT_2022_M-OWADA", out createdNew);
+        var mutex = new Mutex(true, @"Global\OPEN_COPYRIGHT_2024_M-OWADA", out createdNew);
         try
         {
             if(!createdNew)
@@ -69,6 +69,24 @@ class MainForm : Form
     private HotKey hotKey;
     private Dictionary<string, List<string>> lookaheadFiles = new Dictionary<string, List<string>>();
     private readonly string windowsFolder = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+    
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+    
+    [DllImport("user32.dll")]
+    private static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
+    
+    [DllImport("kernel32.dll")]
+    private static extern int GetCurrentThreadId();
+    
+    [DllImport("user32.dll")]
+    private static extern bool AttachThreadInput(int idAttach, int idAttachTo, bool fAttach);
+    
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetFocus();
+    
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
     
     public MainForm()
     {
@@ -666,26 +684,33 @@ class MainForm : Form
         {
             var found = false;
             var config = new Config();
-            foreach(var editor in config.Editor.Where(e => !e.Disable).ToList())
+            try
             {
-                if(path.EndsWith("." + editor.Attribute, true, null))
+                foreach(var editor in config.Editor.Where(e => !e.Disable).ToList())
                 {
-                    if(File.Exists(editor.Value))
+                    if(path.EndsWith("." + editor.Attribute, true, null))
                     {
-                        Process.Start(editor.Value, path);
+                        if(File.Exists(editor.Value))
+                        {
+                            Process.Start(editor.Value, path);
+                        }
+                        else
+                        {
+                            Process.Start(path);
+                        }
+                        found = true;
                     }
-                    else
-                    {
-                        Process.Start(path);
-                    }
-                    found = true;
                 }
+                if(!found)
+                {
+                    Process.Start(path);
+                }
+                result = true;
             }
-            if(!found)
+            catch(Exception)
             {
-                Process.Start(path);
+                MessageBox.Show("ファイル \"" + path + "\" を起動することができませんでした。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            result = true;
         }
         else
         {
@@ -791,12 +816,39 @@ class MainForm : Form
     
     private void HotKeyPush(object sender, EventArgs e)
     {
-        ShowForm();
-        if(comboBox.Enabled && Clipboard.ContainsText())
+        var config = new Config();
+        if(config.AutoPosition)
         {
-            comboBox.Text = Clipboard.GetText();
-            EnterComboBox();
+            this.Location = new Point(Cursor.Position.X + 10, Cursor.Position.Y + 10);
         }
+        if(Form.ActiveForm != null)
+        {
+            return;
+        }
+        if(config.AutoPaste)
+        {
+            Clipboard.Clear();
+            WmCopy();
+        }
+        ShowForm();
+        if(config.AutoPaste)
+        {
+            if(comboBox.Enabled && Clipboard.ContainsText())
+            {
+                comboBox.Text = Clipboard.GetText();
+                EnterComboBox();
+            }
+        }
+    }
+    
+    private void WmCopy()
+    {
+        int processId;
+        var acctiveThreadId = GetWindowThreadProcessId(GetForegroundWindow(), out processId);
+        var currentThreadId = GetCurrentThreadId();
+        AttachThreadInput(acctiveThreadId, currentThreadId, true);
+        SendMessage(GetFocus(), 0x0301, IntPtr.Zero, IntPtr.Zero);
+        AttachThreadInput(acctiveThreadId, currentThreadId, false);
     }
     
     private void ApplicationExit(object sender, EventArgs e)
@@ -847,19 +899,44 @@ class SubForm : Form
     
     private TabControl tabControl = new TabControl();
     
+    private ContextMenuStrip contextMenuStrip1 = new ContextMenuStrip();
     private DataGridView dataGridView1 = new DataGridView();
     private BindingList<Columns1> dataSource1 = new BindingList<Columns1>();
     private TextBox textBoxPath = new TextBox();
+    private Button buttonRef1 = new Button();
+    private Button buttonAdd1 = new Button();
+    private Button buttonMod1 = new Button();
+    private Button buttonDel1 = new Button();
+    private Button buttonDis1 = new Button();
+    private Button buttonUp1 = new Button();
+    private Button buttonDown1 = new Button();
     
+    private ContextMenuStrip contextMenuStrip2 = new ContextMenuStrip();
     private DataGridView dataGridView2 = new DataGridView();
     private BindingList<Columns2> dataSource2 = new BindingList<Columns2>();
     private TextBox textBoxExtension = new TextBox();
     private TextBox textBoxEditor = new TextBox();
+    private Button buttonRef2 = new Button();
+    private Button buttonAdd2 = new Button();
+    private Button buttonMod2 = new Button();
+    private Button buttonDel2 = new Button();
+    private Button buttonDis2 = new Button();
+    private Button buttonUp2 = new Button();
+    private Button buttonDown2 = new Button();
     
+    private ContextMenuStrip contextMenuStrip3 = new ContextMenuStrip();
     private DataGridView dataGridView3 = new DataGridView();
     private BindingList<Columns3> dataSource3 = new BindingList<Columns3>();
+    private Button buttonHelp = new Button();
     private TextBox textBoxCmdName = new TextBox();
     private TextBox textBoxCmdString = new TextBox();
+    private Button buttonRef3 = new Button();
+    private Button buttonAdd3 = new Button();
+    private Button buttonMod3 = new Button();
+    private Button buttonDel3 = new Button();
+    private Button buttonDis3 = new Button();
+    private Button buttonUp3 = new Button();
+    private Button buttonDown3 = new Button();
     
     private CheckBox checkBoxTopMost = new CheckBox();
     private CheckBox checkBoxAutoTrim = new CheckBox();
@@ -867,7 +944,11 @@ class SubForm : Form
     private CheckBox checkBoxMinimize = new CheckBox();
     private CheckBox checkBoxLookahead = new CheckBox();
     private CheckBox checkBoxTaskTray = new CheckBox();
+    private CheckBox checkBoxAutoPosition = new CheckBox();
+    private CheckBox checkBoxAutoPaste = new CheckBox();
     private TextBox textBoxHotKey = new TextBox();
+    private Button buttonSave = new Button();
+    private Button buttonCancel  = new Button();
     
     private Keys hotKeyData = Keys.None;
     
@@ -875,7 +956,7 @@ class SubForm : Form
     {
         // フォーム
         this.Text = "設定";
-        this.Size = new Size(800, 600);
+        this.Size = new Size(820, 650);
         this.MaximizeBox = false;
         this.MinimizeBox = true;
         this.StartPosition = FormStartPosition.CenterScreen;
@@ -887,7 +968,7 @@ class SubForm : Form
         
         // タブコントロール
         tabControl.Location = new Point(10, 10);
-        tabControl.Size = new Size(775, 330);
+        tabControl.Size = new Size(795, 330);
         this.Controls.Add(tabControl);
         
         // タブページ1
@@ -898,9 +979,16 @@ class SubForm : Form
         // ラベル
         tabPage1.Controls.Add(CreateLabel(10, 10, "検索対象のフォルダを指定します。先頭に指定したフォルダから順番に検索されます。Windowsフォルダは指定しても検索されません。"));
         
+        // コンテキストメニュー1
+        contextMenuStrip1.Items.Add("編集", null, ClickMenu1_Edit);
+        contextMenuStrip1.Items.Add("削除", null, ClickMenu1_Del);
+        contextMenuStrip1.Items.Add("無効", null, ClickMenu1_Dis);
+        contextMenuStrip1.Items.Add("上に移動", null, ClickMenu1_Up);
+        contextMenuStrip1.Items.Add("下に移動", null, ClickMenu1_Down);
+        
         // データグリッドビュー1
         dataGridView1.Location = new Point(10, 30);
-        dataGridView1.Size = new Size(750, 235);
+        dataGridView1.Size = new Size(770, 235);
         dataGridView1.DataSource = dataSource1;
         dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         dataGridView1.AllowUserToAddRows = false;
@@ -909,6 +997,7 @@ class SubForm : Form
         dataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         dataGridView1.CellPainting += CellPaintingDataGridView1;
         dataGridView1.CellDoubleClick += CellDoubleClickDataGridView1;
+        dataGridView1.RowContextMenuStripNeeded += RowMenuNeededDataGridView1;
         tabPage1.Controls.Add(dataGridView1);
         
         // ラベル
@@ -916,13 +1005,12 @@ class SubForm : Form
         
         // テキストボックス（Path）
         textBoxPath.Location = new Point(55, 275);
-        textBoxPath.Size = new Size(425, 20);
+        textBoxPath.Size = new Size(445, 20);
         textBoxPath.Text = string.Empty;
         tabPage1.Controls.Add(textBoxPath);
         
         // 参照ボタン1
-        var buttonRef1 = new Button();
-        buttonRef1.Location = new Point(490, 275);
+        buttonRef1.Location = new Point(510, 275);
         buttonRef1.Size = new Size(40, 20);
         buttonRef1.Text = "参照";
         buttonRef1.Click += ClickButtonRef1;
@@ -930,8 +1018,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonRef1);
         
         // 追加ボタン1
-        var buttonAdd1 = new Button();
-        buttonAdd1.Location = new Point(535, 275);
+        buttonAdd1.Location = new Point(555, 275);
         buttonAdd1.Size = new Size(40, 20);
         buttonAdd1.Text = "追加";
         buttonAdd1.Click += ClickButtonAdd1;
@@ -939,8 +1026,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonAdd1);
         
         // 更新ボタン1
-        var buttonMod1 = new Button();
-        buttonMod1.Location = new Point(580, 275);
+        buttonMod1.Location = new Point(600, 275);
         buttonMod1.Size = new Size(40, 20);
         buttonMod1.Text = "更新";
         buttonMod1.Click += ClickButtonMod1;
@@ -948,8 +1034,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonMod1);
         
         // 削除ボタン1
-        var buttonDel1 = new Button();
-        buttonDel1.Location = new Point(625, 275);
+        buttonDel1.Location = new Point(645, 275);
         buttonDel1.Size = new Size(40, 20);
         buttonDel1.Text = "削除";
         buttonDel1.Click += ClickButtonDel1;
@@ -957,8 +1042,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonDel1);
         
         // 無効ボタン1
-        var buttonDis1 = new Button();
-        buttonDis1.Location = new Point(670, 275);
+        buttonDis1.Location = new Point(690, 275);
         buttonDis1.Size = new Size(40, 20);
         buttonDis1.Text = "無効";
         buttonDis1.Click += ClickButtonDis1;
@@ -966,8 +1050,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonDis1);
         
         // ↑ボタン1
-        var buttonUp1 = new Button();
-        buttonUp1.Location = new Point(715, 275);
+        buttonUp1.Location = new Point(735, 275);
         buttonUp1.Size = new Size(20, 20);
         buttonUp1.Text = "↑";
         buttonUp1.Click += ClickButtonUp1;
@@ -975,8 +1058,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonUp1);
         
         // ↓ボタン1
-        var buttonDown1 = new Button();
-        buttonDown1.Location = new Point(740, 275);
+        buttonDown1.Location = new Point(760, 275);
         buttonDown1.Size = new Size(20, 20);
         buttonDown1.Text = "↓";
         buttonDown1.Click += ClickButtonDown1;
@@ -991,9 +1073,16 @@ class SubForm : Form
         // ラベル
         tabPage2.Controls.Add(CreateLabel(10, 10, "検索対象のファイルの拡張子及び使用するエディタを指定します。エディタが指定されていない場合は既定のアプリケーションを使用します。"));
         
+        // コンテキストメニュー2
+        contextMenuStrip2.Items.Add("編集", null, ClickMenu2_Edit);
+        contextMenuStrip2.Items.Add("削除", null, ClickMenu2_Del);
+        contextMenuStrip2.Items.Add("無効", null, ClickMenu2_Dis);
+        contextMenuStrip2.Items.Add("上に移動", null, ClickMenu2_Up);
+        contextMenuStrip2.Items.Add("下に移動", null, ClickMenu2_Down);
+        
         // データグリッドビュー2
         dataGridView2.Location = new Point(10, 30);
-        dataGridView2.Size = new Size(750, 235);
+        dataGridView2.Size = new Size(770, 235);
         dataGridView2.DataSource = dataSource2;
         dataGridView2.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         dataGridView2.AllowUserToAddRows = false;
@@ -1002,6 +1091,7 @@ class SubForm : Form
         dataGridView2.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         dataGridView2.CellPainting += CellPaintingDataGridView2;
         dataGridView2.CellDoubleClick += CellDoubleClickDataGridView2;
+        dataGridView2.RowContextMenuStripNeeded += RowMenuNeededDataGridView2;
         tabPage2.Controls.Add(dataGridView2);
         
         // ラベル
@@ -1018,13 +1108,12 @@ class SubForm : Form
         
         // テキストボックス（Editor）
         textBoxEditor.Location = new Point(170, 275);
-        textBoxEditor.Size = new Size(310, 20);
+        textBoxEditor.Size = new Size(330, 20);
         textBoxEditor.Text = string.Empty;
         tabPage2.Controls.Add(textBoxEditor);
         
         // 参照ボタン2
-        var buttonRef2 = new Button();
-        buttonRef2.Location = new Point(490, 275);
+        buttonRef2.Location = new Point(510, 275);
         buttonRef2.Size = new Size(40, 20);
         buttonRef2.Text = "参照";
         buttonRef2.Click += ClickButtonRef2;
@@ -1032,8 +1121,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonRef2);
         
         // 追加ボタン2
-        var buttonAdd2 = new Button();
-        buttonAdd2.Location = new Point(535, 275);
+        buttonAdd2.Location = new Point(555, 275);
         buttonAdd2.Size = new Size(40, 20);
         buttonAdd2.Text = "追加";
         buttonAdd2.Click += ClickButtonAdd2;
@@ -1041,8 +1129,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonAdd2);
         
         // 更新ボタン2
-        var buttonMod2 = new Button();
-        buttonMod2.Location = new Point(580, 275);
+        buttonMod2.Location = new Point(600, 275);
         buttonMod2.Size = new Size(40, 20);
         buttonMod2.Text = "更新";
         buttonMod2.Click += ClickButtonMod2;
@@ -1050,8 +1137,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonMod2);
         
         // 削除ボタン2
-        var buttonDel2 = new Button();
-        buttonDel2.Location = new Point(625, 275);
+        buttonDel2.Location = new Point(645, 275);
         buttonDel2.Size = new Size(40, 20);
         buttonDel2.Text = "削除";
         buttonDel2.Click += ClickButtonDel2;
@@ -1059,8 +1145,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonDel2);
         
         // 無効ボタン2
-        var buttonDis2 = new Button();
-        buttonDis2.Location = new Point(670, 275);
+        buttonDis2.Location = new Point(690, 275);
         buttonDis2.Size = new Size(40, 20);
         buttonDis2.Text = "無効";
         buttonDis2.Click += ClickButtonDis2;
@@ -1068,8 +1153,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonDis2);
         
         // ↑ボタン2
-        var buttonUp2 = new Button();
-        buttonUp2.Location = new Point(715, 275);
+        buttonUp2.Location = new Point(735, 275);
         buttonUp2.Size = new Size(20, 20);
         buttonUp2.Text = "↑";
         buttonUp2.Click += ClickButtonUp2;
@@ -1077,8 +1161,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonUp2);
         
         // ↓ボタン2
-        var buttonDown2 = new Button();
-        buttonDown2.Location = new Point(740, 275);
+        buttonDown2.Location = new Point(760, 275);
         buttonDown2.Size = new Size(20, 20);
         buttonDown2.Text = "↓";
         buttonDown2.Click += ClickButtonDown2;
@@ -1093,18 +1176,24 @@ class SubForm : Form
         // ラベル
         tabPage3.Controls.Add(CreateLabel(10, 10, "外部アプリケーションを実行するためのコマンドの名前と内容を指定します。詳細については「ヘルプ」ボタンをクリックしてください。"));
         
-        // ヘルプ
-        var buttonHelp = new Button();
-        buttonHelp.Location = new Point(710, 5);
+        // ヘルプボタン
+        buttonHelp.Location = new Point(730, 5);
         buttonHelp.Size = new Size(50, 20);
         buttonHelp.Text = "ヘルプ";
         buttonHelp.Click += ClickButtonHelp;
         toolTip.SetToolTip(buttonHelp, "コマンド生成のヘルプを表示します。");
         tabPage3.Controls.Add(buttonHelp);
         
+        // コンテキストメニュー3
+        contextMenuStrip3.Items.Add("編集", null, ClickMenu3_Edit);
+        contextMenuStrip3.Items.Add("削除", null, ClickMenu3_Del);
+        contextMenuStrip3.Items.Add("無効", null, ClickMenu3_Dis);
+        contextMenuStrip3.Items.Add("上に移動", null, ClickMenu3_Up);
+        contextMenuStrip3.Items.Add("下に移動", null, ClickMenu3_Down);
+        
         // データグリッドビュー3
         dataGridView3.Location = new Point(10, 30);
-        dataGridView3.Size = new Size(750, 235);
+        dataGridView3.Size = new Size(770, 235);
         dataGridView3.DataSource = dataSource3;
         dataGridView3.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         dataGridView3.AllowUserToAddRows = false;
@@ -1113,6 +1202,7 @@ class SubForm : Form
         dataGridView3.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         dataGridView3.CellPainting += CellPaintingDataGridView3;
         dataGridView3.CellDoubleClick += CellDoubleClickDataGridView3;
+        dataGridView3.RowContextMenuStripNeeded += RowMenuNeededDataGridView3;
         tabPage3.Controls.Add(dataGridView3);
         
         // ラベル
@@ -1129,13 +1219,12 @@ class SubForm : Form
         
         // テキストボックス（CmdString）
         textBoxCmdString.Location = new Point(150, 275);
-        textBoxCmdString.Size = new Size(330, 20);
+        textBoxCmdString.Size = new Size(350, 20);
         textBoxCmdString.Text = string.Empty;
         tabPage3.Controls.Add(textBoxCmdString);
         
         // 参照ボタン3
-        var buttonRef3 = new Button();
-        buttonRef3.Location = new Point(490, 275);
+        buttonRef3.Location = new Point(510, 275);
         buttonRef3.Size = new Size(40, 20);
         buttonRef3.Text = "参照";
         buttonRef3.Click += ClickButtonRef3;
@@ -1143,8 +1232,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonRef3);
         
         // 追加ボタン3
-        var buttonAdd3 = new Button();
-        buttonAdd3.Location = new Point(535, 275);
+        buttonAdd3.Location = new Point(555, 275);
         buttonAdd3.Size = new Size(40, 20);
         buttonAdd3.Text = "追加";
         buttonAdd3.Click += ClickButtonAdd3;
@@ -1152,8 +1240,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonAdd3);
         
         // 更新ボタン3
-        var buttonMod3 = new Button();
-        buttonMod3.Location = new Point(580, 275);
+        buttonMod3.Location = new Point(600, 275);
         buttonMod3.Size = new Size(40, 20);
         buttonMod3.Text = "更新";
         buttonMod3.Click += ClickButtonMod3;
@@ -1161,8 +1248,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonMod3);
         
         // 削除ボタン3
-        var buttonDel3 = new Button();
-        buttonDel3.Location = new Point(625, 275);
+        buttonDel3.Location = new Point(645, 275);
         buttonDel3.Size = new Size(40, 20);
         buttonDel3.Text = "削除";
         buttonDel3.Click += ClickButtonDel3;
@@ -1170,8 +1256,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonDel3);
         
         // 無効ボタン3
-        var buttonDis3 = new Button();
-        buttonDis3.Location = new Point(670, 275);
+        buttonDis3.Location = new Point(690, 275);
         buttonDis3.Size = new Size(40, 20);
         buttonDis3.Text = "無効";
         buttonDis3.Click += ClickButtonDis3;
@@ -1179,8 +1264,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonDis3);
         
         // ↑ボタン3
-        var buttonUp3 = new Button();
-        buttonUp3.Location = new Point(715, 275);
+        buttonUp3.Location = new Point(735, 275);
         buttonUp3.Size = new Size(20, 20);
         buttonUp3.Text = "↑";
         buttonUp3.Click += ClickButtonUp3;
@@ -1188,8 +1272,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonUp3);
         
         // ↓ボタン3
-        var buttonDown3 = new Button();
-        buttonDown3.Location = new Point(740, 275);
+        buttonDown3.Location = new Point(760, 275);
         buttonDown3.Size = new Size(20, 20);
         buttonDown3.Text = "↓";
         buttonDown3.Click += ClickButtonDown3;
@@ -1199,7 +1282,7 @@ class SubForm : Form
         // グループボックス
         var groupBox = new GroupBox();
         groupBox.Location = new Point(10, 350);
-        groupBox.Size = new Size(773, 170);
+        groupBox.Size = new Size(793, 220);
         groupBox.FlatStyle = FlatStyle.Standard;
         groupBox.Text = "動作指定";
         this.Controls.Add(groupBox);
@@ -1247,9 +1330,23 @@ class SubForm : Form
         checkBoxTaskTray.Checked = false;
         groupBox.Controls.Add(checkBoxTaskTray);
         
+        // チェックボックス（AutoPosition）
+        checkBoxAutoPosition.Text = "ショートカットキーを押した際にフォームの位置をマウスカーソル付近に移動する";
+        checkBoxAutoPosition.Location = new Point(10, 170);
+        checkBoxAutoPosition.AutoSize = true;
+        checkBoxAutoPosition.Checked = false;
+        groupBox.Controls.Add(checkBoxAutoPosition);
+        
+        // チェックボックス（AutoPaste）
+        checkBoxAutoPaste.Text = "ショートカットキーを押した際に別のアプリケーションで選択中のテキストをコピーしてクリップボード経由で自動で検索する (アプリケーションによっては機能しません)";
+        checkBoxAutoPaste.Location = new Point(10, 195);
+        checkBoxAutoPaste.AutoSize = true;
+        checkBoxAutoPaste.Checked = false;
+        groupBox.Controls.Add(checkBoxAutoPaste);
+        
         // ラベル（HotKey）
         var labelHotKey = new Label();
-        labelHotKey.Location = new Point(20, 530);
+        labelHotKey.Location = new Point(20, 580);
         labelHotKey.Size = new Size(100, 20);
         labelHotKey.Text = "ショートカットキー";
         labelHotKey.BorderStyle = BorderStyle.Fixed3D;
@@ -1257,7 +1354,7 @@ class SubForm : Form
         this.Controls.Add(labelHotKey);
         
         // テキストボックス（HotKey）
-        textBoxHotKey.Location = new Point(130, 530);
+        textBoxHotKey.Location = new Point(130, 580);
         textBoxHotKey.Size = new Size(160, 20);
         textBoxHotKey.Text = string.Empty;
         textBoxHotKey.TextAlign = HorizontalAlignment.Center;
@@ -1269,8 +1366,7 @@ class SubForm : Form
         this.Controls.Add(textBoxHotKey);
         
         // 保存ボタン
-        var buttonSave = new Button();
-        buttonSave.Location = new Point(650, 530);
+        buttonSave.Location = new Point(670, 580);
         buttonSave.Size = new Size(60, 30);
         buttonSave.Text = "保存";
         buttonSave.Click += ClickButtonSave;
@@ -1278,8 +1374,7 @@ class SubForm : Form
         this.Controls.Add(buttonSave);
         
         // 中止ボタン
-        var buttonCancel  = new Button();
-        buttonCancel.Location = new Point(720, 530);
+        buttonCancel.Location = new Point(740, 580);
         buttonCancel.Size = new Size(60, 30);
         buttonCancel.Text = "中止";
         buttonCancel.Click += ClickButtonCancel;
@@ -1436,9 +1531,46 @@ class SubForm : Form
     {
         if(dataGridView1.CurrentCell != null && e.RowIndex != -1)
         {
-            var row = dataSource1[dataGridView1.CurrentCell.RowIndex];
-            textBoxPath.Text = row.Path;
+            CellDoubleClickDataGridView1();
         }
+    }
+    
+    private void CellDoubleClickDataGridView1()
+    {
+        var row = dataSource1[dataGridView1.CurrentCell.RowIndex];
+        textBoxPath.Text = row.Path;
+    }
+    
+    private void RowMenuNeededDataGridView1(object sender, DataGridViewRowContextMenuStripNeededEventArgs e)
+    {
+        dataGridView1.CurrentCell = dataGridView1[0, e.RowIndex];
+        contextMenuStrip1.Items[2].Text = dataSource1[e.RowIndex].Disable ? "有効" : "無効";
+        e.ContextMenuStrip = contextMenuStrip1;
+    }
+    
+    private void ClickMenu1_Edit(object sender, EventArgs e)
+    {
+        CellDoubleClickDataGridView1();
+    }
+    
+    private void ClickMenu1_Del(object sender, EventArgs e)
+    {
+        buttonDel1.PerformClick();
+    }
+    
+    private void ClickMenu1_Dis(object sender, EventArgs e)
+    {
+        buttonDis1.PerformClick();
+    }
+    
+    private void ClickMenu1_Up(object sender, EventArgs e)
+    {
+        buttonUp1.PerformClick();
+    }
+    
+    private void ClickMenu1_Down(object sender, EventArgs e)
+    {
+        buttonDown1.PerformClick();
     }
     
     private void ClickButtonRef1(object sender, EventArgs e)
@@ -1563,10 +1695,47 @@ class SubForm : Form
     {
         if(dataGridView2.CurrentCell != null && e.RowIndex != -1)
         {
-            var row = dataSource2[dataGridView2.CurrentCell.RowIndex];
-            textBoxExtension.Text = row.Extension;
-            textBoxEditor.Text = row.Editor;
+            CellDoubleClickDataGridView2();
         }
+    }
+    
+    private void CellDoubleClickDataGridView2()
+    {
+        var row = dataSource2[dataGridView2.CurrentCell.RowIndex];
+        textBoxExtension.Text = row.Extension;
+        textBoxEditor.Text = row.Editor;
+    }
+    
+    private void RowMenuNeededDataGridView2(object sender, DataGridViewRowContextMenuStripNeededEventArgs e)
+    {
+        dataGridView2.CurrentCell = dataGridView2[0, e.RowIndex];
+        contextMenuStrip2.Items[2].Text = dataSource2[e.RowIndex].Disable ? "有効" : "無効";
+        e.ContextMenuStrip = contextMenuStrip2;
+    }
+    
+    private void ClickMenu2_Edit(object sender, EventArgs e)
+    {
+        CellDoubleClickDataGridView2();
+    }
+    
+    private void ClickMenu2_Del(object sender, EventArgs e)
+    {
+        buttonDel2.PerformClick();
+    }
+    
+    private void ClickMenu2_Dis(object sender, EventArgs e)
+    {
+        buttonDis2.PerformClick();
+    }
+    
+    private void ClickMenu2_Up(object sender, EventArgs e)
+    {
+        buttonUp2.PerformClick();
+    }
+    
+    private void ClickMenu2_Down(object sender, EventArgs e)
+    {
+        buttonDown2.PerformClick();
     }
     
     private void ClickButtonRef2(object sender, EventArgs e)
@@ -1696,10 +1865,15 @@ class SubForm : Form
     {
         if(dataGridView3.CurrentCell != null && e.RowIndex != -1)
         {
-            var row = dataSource3[dataGridView3.CurrentCell.RowIndex];
-            textBoxCmdName.Text = row.CmdName;
-            textBoxCmdString.Text = row.CmdString;
+            CellDoubleClickDataGridView3();
         }
+    }
+    
+    private void CellDoubleClickDataGridView3()
+    {
+        var row = dataSource3[dataGridView3.CurrentCell.RowIndex];
+        textBoxCmdName.Text = row.CmdName;
+        textBoxCmdString.Text = row.CmdString;
     }
     
     private void ClickButtonHelp(object sender, EventArgs e)
@@ -1710,6 +1884,38 @@ class SubForm : Form
                       + @"{\0} : フォームに入力された引数に置換されます。" + Environment.NewLine
                       + @"{\1} - {\100} : 該当する番号の検索フォルダに置換されます。"
                       , "コマンド生成", MessageBoxButtons.OK, MessageBoxIcon.Question);
+    }
+    
+    private void RowMenuNeededDataGridView3(object sender, DataGridViewRowContextMenuStripNeededEventArgs e)
+    {
+        dataGridView3.CurrentCell = dataGridView3[0, e.RowIndex];
+        contextMenuStrip3.Items[2].Text = dataSource3[e.RowIndex].Disable ? "有効" : "無効";
+        e.ContextMenuStrip = contextMenuStrip3;
+    }
+    
+    private void ClickMenu3_Edit(object sender, EventArgs e)
+    {
+        CellDoubleClickDataGridView3();
+    }
+    
+    private void ClickMenu3_Del(object sender, EventArgs e)
+    {
+        buttonDel3.PerformClick();
+    }
+    
+    private void ClickMenu3_Dis(object sender, EventArgs e)
+    {
+        buttonDis3.PerformClick();
+    }
+    
+    private void ClickMenu3_Up(object sender, EventArgs e)
+    {
+        buttonUp3.PerformClick();
+    }
+    
+    private void ClickMenu3_Down(object sender, EventArgs e)
+    {
+        buttonDown3.PerformClick();
     }
     
     private void ClickButtonRef3(object sender, EventArgs e)
@@ -1941,6 +2147,8 @@ class SubForm : Form
         config.Minimize = checkBoxMinimize.Checked;
         config.Lookahead = checkBoxLookahead.Checked;
         config.TaskTray = checkBoxTaskTray.Checked;
+        config.AutoPosition = checkBoxAutoPosition.Checked;
+        config.AutoPaste = checkBoxAutoPaste.Checked;
         config.HotKey = hotKeyData;
         config.Save();
         this.Close();
@@ -1984,6 +2192,8 @@ class SubForm : Form
         checkBoxMinimize.Checked = config.Minimize;
         checkBoxLookahead.Checked = config.Lookahead;
         checkBoxTaskTray.Checked = config.TaskTray;
+        checkBoxAutoPosition.Checked = config.AutoPosition;
+        checkBoxAutoPaste.Checked = config.AutoPaste;
         var keyString = GetKeyString(config.HotKey);
         if(keyString != string.Empty)
         {
@@ -2008,6 +2218,8 @@ class Config
     public bool Parallel { get; set; }
     public bool Lookahead { get; set; }
     public bool TaskTray { get; set; }
+    public bool AutoPosition { get; set; }
+    public bool AutoPaste { get; set; }
     public Keys HotKey { get; set; }
     public List<Element> Path { get; set; }
     public List<Element> Editor { get; set; }
@@ -2046,6 +2258,8 @@ class Config
         Minimize = GetBoolValue(xml, "minimize");
         Lookahead = GetBoolValue(xml, "lookahead");
         TaskTray = GetBoolValue(xml, "tasktray");
+        AutoPosition = GetBoolValue(xml, "position");
+        AutoPaste = GetBoolValue(xml, "paste");
         HotKey = GetKeysValue(xml, "hotkey");
         Path = GetListValue(xml, "path");
         Editor = GetListValue(xml, "editor", "extension");
@@ -2067,6 +2281,8 @@ class Config
         SetElementValue(xml, "minimize", Minimize);
         SetElementValue(xml, "lookahead", Lookahead);
         SetElementValue(xml, "tasktray", TaskTray);
+        SetElementValue(xml, "position", AutoPosition);
+        SetElementValue(xml, "paste", AutoPaste);
         SetElementValue(xml, "hotkey", HotKey);
         SetElementValue(xml, "path", Path);
         SetElementValue(xml, "editor", "extension", Editor);
@@ -2146,6 +2362,8 @@ class Config
                     new XElement("minimize", "False"),
                     new XElement("lookahead", "False"),
                     new XElement("tasktray", "False"),
+                    new XElement("position", "False"),
+                    new XElement("paste", "False"),
                     new XElement("hotkey", "None"),
                     new XElement("path", Environment.GetFolderPath(Environment.SpecialFolder.Personal)),
                     new XElement("editor", @"C:\Windows\notepad.exe", new XAttribute("extension", "txt")),
