@@ -661,6 +661,10 @@ class MainForm : Form
     
     private void OpenFiles()
     {
+        if(listBox.Items.Count == 0)
+        {
+            return;
+        }
         var error = false;
         foreach(var item in listBox.SelectedItems)
         {
