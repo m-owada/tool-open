@@ -21,7 +21,7 @@ using System.Xml.Linq;
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyProduct("OPEN")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyCopyright("Copyright (c) 2024 m-owada.")]
+[assembly: AssemblyCopyright("Copyright (C) 2024 m-owada.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -661,7 +661,7 @@ class MainForm : Form
     
     private void OpenFiles()
     {
-        if(listBox.Items.Count == 0)
+        if(listBox.SelectedItems.Count == 0)
         {
             return;
         }
@@ -839,7 +839,7 @@ class MainForm : Form
         {
             if(comboBox.Enabled && Clipboard.ContainsText())
             {
-                comboBox.Text = Clipboard.GetText();
+                comboBox.Text = Clipboard.GetText().Substring(0, 256);
                 EnterComboBox();
             }
         }
@@ -1368,6 +1368,15 @@ class SubForm : Form
         textBoxHotKey.PreviewKeyDown += PreviewKeyDownTextBoxHotKey;
         toolTip.SetToolTip(textBoxHotKey, "アプリケーションをアクティブにするショートカットキーを設定します。");
         this.Controls.Add(textBoxHotKey);
+        
+        // リンクラベル
+        var linkLabel = new LinkLabel();
+        linkLabel.Location = new Point(585, 590);
+        linkLabel.Text = "バージョン情報";
+        linkLabel.AutoSize =true;
+        linkLabel.LinkClicked += LinkLabelClicked;
+        toolTip.SetToolTip(linkLabel, "アプリケーションのバージョン情報を表示します。");
+        this.Controls.Add(linkLabel);
         
         // 保存ボタン
         buttonSave.Location = new Point(670, 580);
@@ -2111,6 +2120,12 @@ class SubForm : Form
         {
             return string.Empty;
         }
+    }
+    
+    private void LinkLabelClicked(object sender, LinkLabelLinkClickedEventArgs e)
+    {
+        var info = FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location);
+        MessageBox.Show(info.ProductName + " version " + info.ProductVersion + Environment.NewLine + info.LegalCopyright, "バージョン情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
     
     private void ClickButtonSave(object sender, EventArgs e)
