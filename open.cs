@@ -839,10 +839,27 @@ class MainForm : Form
         {
             if(comboBox.Enabled && Clipboard.ContainsText())
             {
-                comboBox.Text = Clipboard.GetText().Substring(0, 256);
+                comboBox.Text = StringLeft(Clipboard.GetText(), 256);
                 EnterComboBox();
             }
         }
+    }
+    
+    private string StringLeft(string str, int length)
+    {
+        if(String.IsNullOrWhiteSpace(str))
+        {
+            return string.Empty;
+        }
+        if(length <= 0)
+        {
+            return string.Empty;
+        }
+        if(str.Length <= length)
+        {
+            return str;
+        }
+        return str.Substring(0, length);
     }
     
     private void WmCopy()
