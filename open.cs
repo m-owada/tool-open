@@ -845,6 +845,16 @@ class MainForm : Form
         }
     }
     
+    private void WmCopy()
+    {
+        int processId;
+        var acctiveThreadId = GetWindowThreadProcessId(GetForegroundWindow(), out processId);
+        var currentThreadId = GetCurrentThreadId();
+        AttachThreadInput(acctiveThreadId, currentThreadId, true);
+        SendMessage(GetFocus(), 0x0301, IntPtr.Zero, IntPtr.Zero);
+        AttachThreadInput(acctiveThreadId, currentThreadId, false);
+    }
+    
     private string StringLeft(string str, int length)
     {
         if(String.IsNullOrWhiteSpace(str))
@@ -860,16 +870,6 @@ class MainForm : Form
             return str;
         }
         return str.Substring(0, length);
-    }
-    
-    private void WmCopy()
-    {
-        int processId;
-        var acctiveThreadId = GetWindowThreadProcessId(GetForegroundWindow(), out processId);
-        var currentThreadId = GetCurrentThreadId();
-        AttachThreadInput(acctiveThreadId, currentThreadId, true);
-        SendMessage(GetFocus(), 0x0301, IntPtr.Zero, IntPtr.Zero);
-        AttachThreadInput(acctiveThreadId, currentThreadId, false);
     }
     
     private void ApplicationExit(object sender, EventArgs e)
@@ -968,6 +968,7 @@ class SubForm : Form
     private CheckBox checkBoxAutoPosition = new CheckBox();
     private CheckBox checkBoxAutoPaste = new CheckBox();
     private TextBox textBoxHotKey = new TextBox();
+    private LinkLabel linkLabel = new LinkLabel();
     private Button buttonSave = new Button();
     private Button buttonCancel  = new Button();
     
@@ -1387,7 +1388,6 @@ class SubForm : Form
         this.Controls.Add(textBoxHotKey);
         
         // リンクラベル
-        var linkLabel = new LinkLabel();
         linkLabel.Location = new Point(585, 590);
         linkLabel.Text = "バージョン情報";
         linkLabel.AutoSize =true;
@@ -2141,8 +2141,9 @@ class SubForm : Form
     
     private void LinkLabelClicked(object sender, LinkLabelLinkClickedEventArgs e)
     {
-        var info = FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location);
-        MessageBox.Show(info.ProductName + " version " + info.ProductVersion + Environment.NewLine + info.LegalCopyright, "バージョン情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        linkLabel.LinkVisited = true;
+        var subForm2 = new SubForm2();
+        subForm2.ShowDialog();
     }
     
     private void ClickButtonSave(object sender, EventArgs e)
@@ -2622,5 +2623,77 @@ class HotKey : IDisposable
             UnregisterHotKey(Handle, hotKeyId);
             base.Dispose(disposing);
         }
+    }
+}
+
+class SubForm2 : Form
+{
+    private LinkLabel linkLabel = new LinkLabel();
+    
+    public SubForm2()
+    {
+        var info = FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location);
+        
+        // フォーム
+        this.Text = "バージョン情報";
+        this.Size = new Size(300, 160);
+        this.MaximizeBox = false;
+        this.MinimizeBox = false;
+        this.StartPosition = FormStartPosition.CenterScreen;
+        this.FormBorderStyle = FormBorderStyle.FixedDialog;
+        
+        // グループボックス
+        var groupBox = new GroupBox();
+        groupBox.Location = new Point(10, 5);
+        groupBox.Size = new Size(275, 85);
+        groupBox.FlatStyle = FlatStyle.Standard;
+        this.Controls.Add(groupBox);
+        
+        // ピクチャーボックス
+        var pictureBox = new PictureBox();
+        pictureBox.Image = Icon.ExtractAssociatedIcon(Process.GetCurrentProcess().MainModule.FileName).ToBitmap();
+        pictureBox.Location = new Point(15, 30);
+        pictureBox.ClientSize = new Size(32, 32);
+        groupBox.Controls.Add(pictureBox);
+        
+        // ラベル1
+        var label1 = new Label();
+        label1.Location = new Point(60, 20);
+        label1.Text = info.ProductName + " version " + info.ProductVersion;
+        label1.Size = new Size(label1.PreferredWidth, 20);
+        groupBox.Controls.Add(label1);
+        
+        // ラベル2
+        var label2 = new Label();
+        label2.Location = new Point(60, 40);
+        label2.Text = info.LegalCopyright;
+        label2.Size = new Size(label2.PreferredWidth, 20);
+        groupBox.Controls.Add(label2);
+        
+        // リンクラベル
+        linkLabel.Location = new Point(60, 60);
+        linkLabel.Text = "https://github.com/m-owada/tool-open";
+        linkLabel.AutoSize = true;
+        linkLabel.LinkClicked += LinkLabelClicked;
+        groupBox.Controls.Add(linkLabel);
+        
+        // 閉じるボタン
+        var button = new Button();
+        button.Location = new Point(235, 100);
+        button.Size = new Size(50, 20);
+        button.Text = "閉じる";
+        button.Click += ClickButton;
+        this.Controls.Add(button);
+    }
+    
+    private void LinkLabelClicked(object sender, LinkLabelLinkClickedEventArgs e)
+    {
+        linkLabel.LinkVisited = true;
+        Process.Start(linkLabel.Text);
+    }
+    
+    private void ClickButton(object sender, EventArgs e)
+    {
+        this.Close();
     }
 }
