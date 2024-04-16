@@ -3,4 +3,6 @@ if exist app.ico (
 ) else (
   C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe /t:winexe open.cs
 )
-pause
+if not %errorlevel% == 0 (
+  pause
+)

@@ -27,25 +27,27 @@ using System.Xml.Linq;
 
 class Program
 {
+    public static EventWaitHandle WaitHandle;
+    
     [STAThread]
     static void Main()
     {
         bool createdNew;
-        var mutex = new Mutex(true, @"Global\OPEN_COPYRIGHT_2024_M-OWADA", out createdNew);
+        WaitHandle = new EventWaitHandle(false, EventResetMode.ManualReset, @"Global\OPEN_COPYRIGHT_2024_M-OWADA", out createdNew);
         try
         {
             if(!createdNew)
             {
-                MessageBox.Show("複数起動はできません。");
+                WaitHandle.Set();
                 return;
             }
             Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
             Application.ThreadException += (object sender, ThreadExceptionEventArgs e) =>
             {
                 throw new Exception(e.Exception.Message);
             };
-            var mainForm = new MainForm();
-            Application.Run();
+            Application.Run(new MainForm());
         }
         catch(Exception e)
         {
@@ -54,8 +56,10 @@ class Program
         }
         finally
         {
-            mutex.ReleaseMutex();
-            mutex.Close();
+            if(WaitHandle != null)
+            {
+                WaitHandle.Dispose();
+            }
         }
     }
 }
@@ -97,6 +101,8 @@ class MainForm : Form
         this.Location = new Point(10, 10);
         this.StartPosition = FormStartPosition.Manual;
         this.FormBorderStyle = FormBorderStyle.Sizable;
+        this.Load += OnFormLoad;
+        this.Shown += OnFormShown;
         this.FormClosing += OnFormClosing;
         this.Icon = Icon.ExtractAssociatedIcon(Process.GetCurrentProcess().MainModule.FileName);
         
@@ -155,10 +161,6 @@ class MainForm : Form
             notifyIcon.ContextMenuStrip = menu;
             notifyIcon.DoubleClick += DoubleClickIcon;
         }
-        else
-        {
-            this.Show();
-        }
         
         // ホットキー
         SetHotKey(config.HotKey);
@@ -170,6 +172,41 @@ class MainForm : Form
         if(config.Lookahead)
         {
             SetLookaheadFiles();
+        }
+    }
+    
+    private void OnFormLoad(object sender, EventArgs e)
+    {
+        ThreadWait();
+    }
+    
+    private void OnFormShown(object sender, EventArgs e)
+    {
+        var config = new Config();
+        if(config.TaskTray)
+        {
+            this.WindowState = FormWindowState.Minimized;
+            this.ShowInTaskbar = false;
+            this.Hide();
+        }
+    }
+    
+    private async void ThreadWait()
+    {
+        if(Program.WaitHandle != null)
+        {
+            await Task.Run(() =>
+            {
+                while(true)
+                {
+                    Program.WaitHandle.WaitOne();
+                    Program.WaitHandle.Reset();
+                    this.Invoke((Action)(() =>
+                    {
+                        ShowForm();
+                    }));
+                }
+            });
         }
     }
     
@@ -784,6 +821,7 @@ class MainForm : Form
     private void ShowForm()
     {
         this.Show();
+        this.ShowInTaskbar = true;
         if(this.WindowState == FormWindowState.Minimized)
         {
             this.WindowState = FormWindowState.Normal;
@@ -874,6 +912,10 @@ class MainForm : Form
     
     private void ApplicationExit(object sender, EventArgs e)
     {
+        if(Program.WaitHandle != null)
+        {
+            Program.WaitHandle.Dispose();
+        }
         hotKey.Dispose();
         Application.ApplicationExit -= ApplicationExit;
     }
@@ -978,7 +1020,7 @@ class SubForm : Form
     {
         // フォーム
         this.Text = "設定";
-        this.Size = new Size(820, 650);
+        this.Size = new Size(800, 650);
         this.MaximizeBox = false;
         this.MinimizeBox = true;
         this.StartPosition = FormStartPosition.CenterScreen;
@@ -990,7 +1032,7 @@ class SubForm : Form
         
         // タブコントロール
         tabControl.Location = new Point(10, 10);
-        tabControl.Size = new Size(795, 330);
+        tabControl.Size = new Size(775, 330);
         this.Controls.Add(tabControl);
         
         // タブページ1
@@ -1010,7 +1052,7 @@ class SubForm : Form
         
         // データグリッドビュー1
         dataGridView1.Location = new Point(10, 30);
-        dataGridView1.Size = new Size(770, 235);
+        dataGridView1.Size = new Size(750, 235);
         dataGridView1.DataSource = dataSource1;
         dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         dataGridView1.AllowUserToAddRows = false;
@@ -1027,12 +1069,12 @@ class SubForm : Form
         
         // テキストボックス（Path）
         textBoxPath.Location = new Point(55, 275);
-        textBoxPath.Size = new Size(445, 20);
+        textBoxPath.Size = new Size(425, 20);
         textBoxPath.Text = string.Empty;
         tabPage1.Controls.Add(textBoxPath);
         
         // 参照ボタン1
-        buttonRef1.Location = new Point(510, 275);
+        buttonRef1.Location = new Point(490, 275);
         buttonRef1.Size = new Size(40, 20);
         buttonRef1.Text = "参照";
         buttonRef1.Click += ClickButtonRef1;
@@ -1040,7 +1082,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonRef1);
         
         // 追加ボタン1
-        buttonAdd1.Location = new Point(555, 275);
+        buttonAdd1.Location = new Point(535, 275);
         buttonAdd1.Size = new Size(40, 20);
         buttonAdd1.Text = "追加";
         buttonAdd1.Click += ClickButtonAdd1;
@@ -1048,7 +1090,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonAdd1);
         
         // 更新ボタン1
-        buttonMod1.Location = new Point(600, 275);
+        buttonMod1.Location = new Point(580, 275);
         buttonMod1.Size = new Size(40, 20);
         buttonMod1.Text = "更新";
         buttonMod1.Click += ClickButtonMod1;
@@ -1056,7 +1098,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonMod1);
         
         // 削除ボタン1
-        buttonDel1.Location = new Point(645, 275);
+        buttonDel1.Location = new Point(625, 275);
         buttonDel1.Size = new Size(40, 20);
         buttonDel1.Text = "削除";
         buttonDel1.Click += ClickButtonDel1;
@@ -1064,7 +1106,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonDel1);
         
         // 無効ボタン1
-        buttonDis1.Location = new Point(690, 275);
+        buttonDis1.Location = new Point(670, 275);
         buttonDis1.Size = new Size(40, 20);
         buttonDis1.Text = "無効";
         buttonDis1.Click += ClickButtonDis1;
@@ -1072,7 +1114,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonDis1);
         
         // ↑ボタン1
-        buttonUp1.Location = new Point(735, 275);
+        buttonUp1.Location = new Point(715, 275);
         buttonUp1.Size = new Size(20, 20);
         buttonUp1.Text = "↑";
         buttonUp1.Click += ClickButtonUp1;
@@ -1080,7 +1122,7 @@ class SubForm : Form
         tabPage1.Controls.Add(buttonUp1);
         
         // ↓ボタン1
-        buttonDown1.Location = new Point(760, 275);
+        buttonDown1.Location = new Point(740, 275);
         buttonDown1.Size = new Size(20, 20);
         buttonDown1.Text = "↓";
         buttonDown1.Click += ClickButtonDown1;
@@ -1104,7 +1146,7 @@ class SubForm : Form
         
         // データグリッドビュー2
         dataGridView2.Location = new Point(10, 30);
-        dataGridView2.Size = new Size(770, 235);
+        dataGridView2.Size = new Size(750, 235);
         dataGridView2.DataSource = dataSource2;
         dataGridView2.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         dataGridView2.AllowUserToAddRows = false;
@@ -1130,12 +1172,12 @@ class SubForm : Form
         
         // テキストボックス（Editor）
         textBoxEditor.Location = new Point(170, 275);
-        textBoxEditor.Size = new Size(330, 20);
+        textBoxEditor.Size = new Size(310, 20);
         textBoxEditor.Text = string.Empty;
         tabPage2.Controls.Add(textBoxEditor);
         
         // 参照ボタン2
-        buttonRef2.Location = new Point(510, 275);
+        buttonRef2.Location = new Point(490, 275);
         buttonRef2.Size = new Size(40, 20);
         buttonRef2.Text = "参照";
         buttonRef2.Click += ClickButtonRef2;
@@ -1143,7 +1185,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonRef2);
         
         // 追加ボタン2
-        buttonAdd2.Location = new Point(555, 275);
+        buttonAdd2.Location = new Point(535, 275);
         buttonAdd2.Size = new Size(40, 20);
         buttonAdd2.Text = "追加";
         buttonAdd2.Click += ClickButtonAdd2;
@@ -1151,7 +1193,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonAdd2);
         
         // 更新ボタン2
-        buttonMod2.Location = new Point(600, 275);
+        buttonMod2.Location = new Point(580, 275);
         buttonMod2.Size = new Size(40, 20);
         buttonMod2.Text = "更新";
         buttonMod2.Click += ClickButtonMod2;
@@ -1159,7 +1201,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonMod2);
         
         // 削除ボタン2
-        buttonDel2.Location = new Point(645, 275);
+        buttonDel2.Location = new Point(625, 275);
         buttonDel2.Size = new Size(40, 20);
         buttonDel2.Text = "削除";
         buttonDel2.Click += ClickButtonDel2;
@@ -1167,7 +1209,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonDel2);
         
         // 無効ボタン2
-        buttonDis2.Location = new Point(690, 275);
+        buttonDis2.Location = new Point(670, 275);
         buttonDis2.Size = new Size(40, 20);
         buttonDis2.Text = "無効";
         buttonDis2.Click += ClickButtonDis2;
@@ -1175,7 +1217,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonDis2);
         
         // ↑ボタン2
-        buttonUp2.Location = new Point(735, 275);
+        buttonUp2.Location = new Point(715, 275);
         buttonUp2.Size = new Size(20, 20);
         buttonUp2.Text = "↑";
         buttonUp2.Click += ClickButtonUp2;
@@ -1183,7 +1225,7 @@ class SubForm : Form
         tabPage2.Controls.Add(buttonUp2);
         
         // ↓ボタン2
-        buttonDown2.Location = new Point(760, 275);
+        buttonDown2.Location = new Point(740, 275);
         buttonDown2.Size = new Size(20, 20);
         buttonDown2.Text = "↓";
         buttonDown2.Click += ClickButtonDown2;
@@ -1199,7 +1241,7 @@ class SubForm : Form
         tabPage3.Controls.Add(CreateLabel(10, 10, "外部アプリケーションを実行するためのコマンドの名前と内容を指定します。詳細については「ヘルプ」ボタンをクリックしてください。"));
         
         // ヘルプボタン
-        buttonHelp.Location = new Point(730, 5);
+        buttonHelp.Location = new Point(710, 5);
         buttonHelp.Size = new Size(50, 20);
         buttonHelp.Text = "ヘルプ";
         buttonHelp.Click += ClickButtonHelp;
@@ -1215,7 +1257,7 @@ class SubForm : Form
         
         // データグリッドビュー3
         dataGridView3.Location = new Point(10, 30);
-        dataGridView3.Size = new Size(770, 235);
+        dataGridView3.Size = new Size(750, 235);
         dataGridView3.DataSource = dataSource3;
         dataGridView3.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         dataGridView3.AllowUserToAddRows = false;
@@ -1241,12 +1283,12 @@ class SubForm : Form
         
         // テキストボックス（CmdString）
         textBoxCmdString.Location = new Point(150, 275);
-        textBoxCmdString.Size = new Size(350, 20);
+        textBoxCmdString.Size = new Size(330, 20);
         textBoxCmdString.Text = string.Empty;
         tabPage3.Controls.Add(textBoxCmdString);
         
         // 参照ボタン3
-        buttonRef3.Location = new Point(510, 275);
+        buttonRef3.Location = new Point(490, 275);
         buttonRef3.Size = new Size(40, 20);
         buttonRef3.Text = "参照";
         buttonRef3.Click += ClickButtonRef3;
@@ -1254,7 +1296,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonRef3);
         
         // 追加ボタン3
-        buttonAdd3.Location = new Point(555, 275);
+        buttonAdd3.Location = new Point(535, 275);
         buttonAdd3.Size = new Size(40, 20);
         buttonAdd3.Text = "追加";
         buttonAdd3.Click += ClickButtonAdd3;
@@ -1262,7 +1304,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonAdd3);
         
         // 更新ボタン3
-        buttonMod3.Location = new Point(600, 275);
+        buttonMod3.Location = new Point(580, 275);
         buttonMod3.Size = new Size(40, 20);
         buttonMod3.Text = "更新";
         buttonMod3.Click += ClickButtonMod3;
@@ -1270,7 +1312,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonMod3);
         
         // 削除ボタン3
-        buttonDel3.Location = new Point(645, 275);
+        buttonDel3.Location = new Point(625, 275);
         buttonDel3.Size = new Size(40, 20);
         buttonDel3.Text = "削除";
         buttonDel3.Click += ClickButtonDel3;
@@ -1278,7 +1320,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonDel3);
         
         // 無効ボタン3
-        buttonDis3.Location = new Point(690, 275);
+        buttonDis3.Location = new Point(670, 275);
         buttonDis3.Size = new Size(40, 20);
         buttonDis3.Text = "無効";
         buttonDis3.Click += ClickButtonDis3;
@@ -1286,7 +1328,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonDis3);
         
         // ↑ボタン3
-        buttonUp3.Location = new Point(735, 275);
+        buttonUp3.Location = new Point(715, 275);
         buttonUp3.Size = new Size(20, 20);
         buttonUp3.Text = "↑";
         buttonUp3.Click += ClickButtonUp3;
@@ -1294,7 +1336,7 @@ class SubForm : Form
         tabPage3.Controls.Add(buttonUp3);
         
         // ↓ボタン3
-        buttonDown3.Location = new Point(760, 275);
+        buttonDown3.Location = new Point(740, 275);
         buttonDown3.Size = new Size(20, 20);
         buttonDown3.Text = "↓";
         buttonDown3.Click += ClickButtonDown3;
@@ -1304,7 +1346,7 @@ class SubForm : Form
         // グループボックス
         var groupBox = new GroupBox();
         groupBox.Location = new Point(10, 350);
-        groupBox.Size = new Size(793, 220);
+        groupBox.Size = new Size(773, 220);
         groupBox.FlatStyle = FlatStyle.Standard;
         groupBox.Text = "動作指定";
         this.Controls.Add(groupBox);
@@ -1388,7 +1430,7 @@ class SubForm : Form
         this.Controls.Add(textBoxHotKey);
         
         // リンクラベル
-        linkLabel.Location = new Point(585, 590);
+        linkLabel.Location = new Point(565, 590);
         linkLabel.Text = "バージョン情報";
         linkLabel.AutoSize =true;
         linkLabel.LinkClicked += LinkLabelClicked;
@@ -1396,7 +1438,7 @@ class SubForm : Form
         this.Controls.Add(linkLabel);
         
         // 保存ボタン
-        buttonSave.Location = new Point(670, 580);
+        buttonSave.Location = new Point(650, 580);
         buttonSave.Size = new Size(60, 30);
         buttonSave.Text = "保存";
         buttonSave.Click += ClickButtonSave;
@@ -1404,7 +1446,7 @@ class SubForm : Form
         this.Controls.Add(buttonSave);
         
         // 中止ボタン
-        buttonCancel.Location = new Point(740, 580);
+        buttonCancel.Location = new Point(720, 580);
         buttonCancel.Size = new Size(60, 30);
         buttonCancel.Text = "中止";
         buttonCancel.Click += ClickButtonCancel;
