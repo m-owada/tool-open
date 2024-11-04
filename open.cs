@@ -14,9 +14,9 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml.Linq;
 
-[assembly: AssemblyVersion("3.1.0.0")]
-[assembly: AssemblyFileVersion ("3.1.0.0")]
-[assembly: AssemblyInformationalVersion("3.1")]
+[assembly: AssemblyVersion("3.2.0.0")]
+[assembly: AssemblyFileVersion ("3.2.0.0")]
+[assembly: AssemblyInformationalVersion("3.2")]
 [assembly: AssemblyTitle("")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyProduct("OPEN")]
@@ -182,8 +182,7 @@ class MainForm : Form
     
     private void OnFormShown(object sender, EventArgs e)
     {
-        var config = new Config();
-        if(config.TaskTray)
+        if(notifyIcon.Visible)
         {
             this.WindowState = FormWindowState.Minimized;
             this.ShowInTaskbar = false;
@@ -350,11 +349,11 @@ class MainForm : Form
             var items = new Dictionary<string, List<string>>();
             if(lookaheadFiles.Count > 0)
             {
-                items = GetLookaheadFiles(comboBox.Text);
+                items = GetLookaheadFiles(SetWildcard(comboBox.Text));
             }
             else
             {
-                items = GetEnumerateFiles(comboBox.Text);
+                items = GetEnumerateFiles(SetWildcard(comboBox.Text));
             }
             if(items.Count > 0)
             {
@@ -387,6 +386,19 @@ class MainForm : Form
         }
     }
     
+    private string SetWildcard(string text)
+    {
+        var config = new Config();
+        if(StringLeft(text, 1) == "*" || config.Contains)
+        {
+            return "*" + text.TrimStart('*');
+        }
+        else
+        {
+            return text;
+        }
+    }
+    
     private Dictionary<string, List<string>> GetEnumerateFiles(string keyword)
     {
         var items = new Dictionary<string, List<string>>();
@@ -403,16 +415,16 @@ class MainForm : Form
         }
         if(config.Parallel)
         {
-            items = ParallelSearch(paths, extensions, keyword);
+            items = ParallelSearch(paths, extensions, config.Ignore, keyword);
         }
         else
         {
-            items = SerialSearch(paths, extensions, keyword);
+            items = SerialSearch(paths, extensions, config.Ignore, keyword);
         }
         return items;
     }
     
-    private Dictionary<string, List<string>> ParallelSearch(List<string> paths, List<string> extensions, string keyword)
+    private Dictionary<string, List<string>> ParallelSearch(List<string> paths, List<string> extensions, bool ignore, string keyword)
     {
         var items = new Dictionary<string, List<string>>();
         var items_all = new Dictionary<int, Dictionary<string, List<string>>>();
@@ -425,7 +437,7 @@ class MainForm : Form
             (i, loopState, items_wk) =>
             {
                 items_wk[i] = new Dictionary<string, List<string>>();
-                foreach(var file in EnumerateFilesAllDirectories(paths[i], keyword + "*", extensions))
+                foreach(var file in EnumerateFilesAllDirectories(paths[i], keyword + "*", extensions, ignore))
                 {
                     var name = Path.GetFileName(file);
                     if(!items_wk[i].ContainsKey(name))
@@ -464,12 +476,12 @@ class MainForm : Form
         return items;
     }
     
-    private Dictionary<string, List<string>> SerialSearch(List<string> paths, List<string> extensions, string keyword)
+    private Dictionary<string, List<string>> SerialSearch(List<string> paths, List<string> extensions, bool ignore, string keyword)
     {
         var items = new Dictionary<string, List<string>>();
         foreach(var path in paths)
         {
-            foreach(var file in EnumerateFilesAllDirectories(path, keyword + "*", extensions))
+            foreach(var file in EnumerateFilesAllDirectories(path, keyword + "*", extensions, ignore))
             {
                 var name = Path.GetFileName(file);
                 if(!items.ContainsKey(name))
@@ -482,7 +494,7 @@ class MainForm : Form
         return items;
     }
     
-    private IEnumerable<string> EnumerateFilesAllDirectories(string path, string searchPattern, List<string> extensions)
+    private IEnumerable<string> EnumerateFilesAllDirectories(string path, string searchPattern, List<string> extensions, bool ignore)
     {
         var files = Enumerable.Empty<string>();
         if(path.StartsWith(windowsFolder, true, null))
@@ -494,7 +506,14 @@ class MainForm : Form
             files = Directory.EnumerateFiles(path, searchPattern);
             if(extensions.Count > 0)
             {
-                files = files.Where(file => extensions.Any(extension => file.EndsWith("." + extension, true, null)));
+                if(ignore)
+                {
+                    files = files.Where(file => extensions.All(extension => !file.EndsWith("." + extension, true, null)));
+                }
+                else
+                {
+                    files = files.Where(file => extensions.Any(extension => file.EndsWith("." + extension, true, null)));
+                }
             }
         }
         catch(UnauthorizedAccessException)
@@ -507,7 +526,7 @@ class MainForm : Form
         {
             foreach(var p in Directory.EnumerateDirectories(path))
             {
-                files = files.Union(EnumerateFilesAllDirectories(p, searchPattern, extensions));
+                files = files.Union(EnumerateFilesAllDirectories(p, searchPattern, extensions, ignore));
             }
         }
         catch(UnauthorizedAccessException)
@@ -620,6 +639,10 @@ class MainForm : Form
         {
             OpenFiles();
         }
+        else if(e.KeyData == (Keys.Control | Keys.A))
+        {
+            SendKeys.SendWait("{HOME}+{END}");
+        }
         else if(e.KeyData == (Keys.Control | Keys.C))
         {
             CopyFiles();
@@ -648,7 +671,7 @@ class MainForm : Form
         if(e.Button == MouseButtons.Right)
         {
             listBox.ContextMenuStrip = new ContextMenuStrip();
-            int index = listBox.IndexFromPoint(e.Location);
+            var index = listBox.IndexFromPoint(e.Location);
             if(index >= 0)
             {
                 listBox.SelectedIndex = index;
@@ -657,6 +680,19 @@ class MainForm : Form
                     if(index != i && listBox.GetSelected(i)) listBox.SetSelected(i, false);
                 }
                 listBox.ContextMenuStrip = SetListBoxMenu();
+            }
+        }
+        else if(e.Button == MouseButtons.Middle)
+        {
+            var index = listBox.IndexFromPoint(e.Location);
+            if(index >= 0)
+            {
+                listBox.SelectedIndex = index;
+                for(int i = 0; i < listBox.Items.Count; i++)
+                {
+                    if(index != i && listBox.GetSelected(i)) listBox.SetSelected(i, false);
+                }
+                OpenDirectory();
             }
         }
     }
@@ -693,6 +729,21 @@ class MainForm : Form
         if(OpenFile(menuItem.Text))
         {
             WindowAutoMinimized();
+        }
+    }
+    
+    private void OpenDirectory()
+    {
+        var item = listBox.SelectedItem;
+        var file = ((KeyValuePair<string, List<string>>)item).Value.First();
+        if(File.Exists(file))
+        {
+            var explorer = new Explorer();
+            explorer.Open(file);
+        }
+        else
+        {
+            MessageBox.Show("ファイル \"" + file + "\" が見つかりません。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
     
@@ -1003,7 +1054,9 @@ class SubForm : Form
     
     private CheckBox checkBoxTopMost = new CheckBox();
     private CheckBox checkBoxAutoTrim = new CheckBox();
+    private CheckBox checkBoxContains = new CheckBox();
     private CheckBox checkBoxParallel = new CheckBox();
+    private CheckBox checkBoxIgnore = new CheckBox();
     private CheckBox checkBoxMinimize = new CheckBox();
     private CheckBox checkBoxLookahead = new CheckBox();
     private CheckBox checkBoxTaskTray = new CheckBox();
@@ -1020,7 +1073,7 @@ class SubForm : Form
     {
         // フォーム
         this.Text = "設定";
-        this.Size = new Size(800, 650);
+        this.Size = new Size(800, 700);
         this.MaximizeBox = false;
         this.MinimizeBox = true;
         this.StartPosition = FormStartPosition.CenterScreen;
@@ -1346,7 +1399,7 @@ class SubForm : Form
         // グループボックス
         var groupBox = new GroupBox();
         groupBox.Location = new Point(10, 350);
-        groupBox.Size = new Size(773, 220);
+        groupBox.Size = new Size(773, 270);
         groupBox.FlatStyle = FlatStyle.Standard;
         groupBox.Text = "動作指定";
         this.Controls.Add(groupBox);
@@ -1365,52 +1418,67 @@ class SubForm : Form
         checkBoxAutoTrim.Checked = false;
         groupBox.Controls.Add(checkBoxAutoTrim);
         
+        // チェックボックス（Contains）
+        checkBoxContains.Text = "フォームに入力したファイル名を常に部分一致で検索する (通常は前方一致で検索します)";
+        checkBoxContains.Location = new Point(10, 70);
+        checkBoxContains.AutoSize = true;
+        checkBoxContains.Checked = false;
+        groupBox.Controls.Add(checkBoxContains);
+        
         // チェックボックス（Minimize）
         checkBoxMinimize.Text = "ファイルを開くと同時に自動でフォームを最小化する";
-        checkBoxMinimize.Location = new Point(10, 70);
+        checkBoxMinimize.Location = new Point(10, 95);
         checkBoxMinimize.AutoSize = true;
         checkBoxMinimize.Checked = false;
         groupBox.Controls.Add(checkBoxMinimize);
         
         // チェックボックス（Parallel）
-        checkBoxParallel.Text = "ファイルの検索処理を検索フォルダごとに並列に処理する (処理速度が向上する場合があります)";
-        checkBoxParallel.Location = new Point(10, 95);
+        checkBoxParallel.Text = "ファイルの検索処理を検索フォルダごとに並列に処理する (検索フォルダ数が多い場合に処理速度が向上します)";
+        checkBoxParallel.Location = new Point(10, 120);
         checkBoxParallel.AutoSize = true;
         checkBoxParallel.Checked = false;
         groupBox.Controls.Add(checkBoxParallel);
         
+        // チェックボックス（Ignore）
+        checkBoxIgnore.Text = "拡張子／エディタ指定に登録されているファイルの拡張子を検索対象から除外するファイルの拡張子として扱う";
+        checkBoxIgnore.Location = new Point(10, 145);
+        checkBoxIgnore.AutoSize = true;
+        checkBoxIgnore.Checked = false;
+        checkBoxIgnore.CheckedChanged += (sender, e) => IsChanged = true;
+        groupBox.Controls.Add(checkBoxIgnore);
+        
         // チェックボックス（Lookahead）
         checkBoxLookahead.Text = "アプリケーション起動時に検索フォルダに格納されているファイルの一覧を先読みしてメモリに記憶する";
-        checkBoxLookahead.Location = new Point(10, 120);
+        checkBoxLookahead.Location = new Point(10, 170);
         checkBoxLookahead.AutoSize = true;
         checkBoxLookahead.Checked = false;
-        checkBoxLookahead.CheckedChanged += CheckedChangedCheckBoxLookahead;
+        checkBoxLookahead.CheckedChanged += (sender, e) => IsChanged = true;
         groupBox.Controls.Add(checkBoxLookahead);
         
         // チェックボックス（Tasktray）
         checkBoxTaskTray.Text = "アプリケーション起動時にタスクトレイに常駐する (次回アプリケーション起動時に有効となります)";
-        checkBoxTaskTray.Location = new Point(10, 145);
+        checkBoxTaskTray.Location = new Point(10, 195);
         checkBoxTaskTray.AutoSize = true;
         checkBoxTaskTray.Checked = false;
         groupBox.Controls.Add(checkBoxTaskTray);
         
         // チェックボックス（AutoPosition）
         checkBoxAutoPosition.Text = "ショートカットキーを押した際にフォームの位置をマウスカーソル付近に移動する";
-        checkBoxAutoPosition.Location = new Point(10, 170);
+        checkBoxAutoPosition.Location = new Point(10, 220);
         checkBoxAutoPosition.AutoSize = true;
         checkBoxAutoPosition.Checked = false;
         groupBox.Controls.Add(checkBoxAutoPosition);
         
         // チェックボックス（AutoPaste）
         checkBoxAutoPaste.Text = "ショートカットキーを押した際に別のアプリケーションで選択中のテキストをコピーしてクリップボード経由で自動で検索する (アプリケーションによっては機能しません)";
-        checkBoxAutoPaste.Location = new Point(10, 195);
+        checkBoxAutoPaste.Location = new Point(10, 245);
         checkBoxAutoPaste.AutoSize = true;
         checkBoxAutoPaste.Checked = false;
         groupBox.Controls.Add(checkBoxAutoPaste);
         
         // ラベル（HotKey）
         var labelHotKey = new Label();
-        labelHotKey.Location = new Point(20, 580);
+        labelHotKey.Location = new Point(20, 630);
         labelHotKey.Size = new Size(100, 20);
         labelHotKey.Text = "ショートカットキー";
         labelHotKey.BorderStyle = BorderStyle.Fixed3D;
@@ -1418,7 +1486,7 @@ class SubForm : Form
         this.Controls.Add(labelHotKey);
         
         // テキストボックス（HotKey）
-        textBoxHotKey.Location = new Point(130, 580);
+        textBoxHotKey.Location = new Point(130, 630);
         textBoxHotKey.Size = new Size(160, 20);
         textBoxHotKey.Text = string.Empty;
         textBoxHotKey.TextAlign = HorizontalAlignment.Center;
@@ -1430,7 +1498,7 @@ class SubForm : Form
         this.Controls.Add(textBoxHotKey);
         
         // リンクラベル
-        linkLabel.Location = new Point(565, 590);
+        linkLabel.Location = new Point(565, 640);
         linkLabel.Text = "バージョン情報";
         linkLabel.AutoSize =true;
         linkLabel.LinkClicked += LinkLabelClicked;
@@ -1438,7 +1506,7 @@ class SubForm : Form
         this.Controls.Add(linkLabel);
         
         // 保存ボタン
-        buttonSave.Location = new Point(650, 580);
+        buttonSave.Location = new Point(650, 630);
         buttonSave.Size = new Size(60, 30);
         buttonSave.Text = "保存";
         buttonSave.Click += ClickButtonSave;
@@ -1446,7 +1514,7 @@ class SubForm : Form
         this.Controls.Add(buttonSave);
         
         // 中止ボタン
-        buttonCancel.Location = new Point(720, 580);
+        buttonCancel.Location = new Point(720, 630);
         buttonCancel.Size = new Size(60, 30);
         buttonCancel.Text = "中止";
         buttonCancel.Click += ClickButtonCancel;
@@ -2119,11 +2187,6 @@ class SubForm : Form
         }
     }
     
-    private void CheckedChangedCheckBoxLookahead(object sender, EventArgs e)
-    {
-        IsChanged = true;
-    }
-    
     private void PreviewKeyDownTextBoxHotKey(object sender, PreviewKeyDownEventArgs e)
     {
         var keyString = GetKeyString(e.KeyData);
@@ -2222,8 +2285,10 @@ class SubForm : Form
         }
         config.TopMost = checkBoxTopMost.Checked;
         config.AutoTrim = checkBoxAutoTrim.Checked;
+        config.Contains = checkBoxContains.Checked;
         config.Parallel = checkBoxParallel.Checked;
         config.Minimize = checkBoxMinimize.Checked;
+        config.Ignore = checkBoxIgnore.Checked;
         config.Lookahead = checkBoxLookahead.Checked;
         config.TaskTray = checkBoxTaskTray.Checked;
         config.AutoPosition = checkBoxAutoPosition.Checked;
@@ -2267,8 +2332,10 @@ class SubForm : Form
         }
         checkBoxTopMost.Checked = config.TopMost;
         checkBoxAutoTrim.Checked = config.AutoTrim;
+        checkBoxContains.Checked = config.Contains;
         checkBoxParallel.Checked = config.Parallel;
         checkBoxMinimize.Checked = config.Minimize;
+        checkBoxIgnore.Checked = config.Ignore;
         checkBoxLookahead.Checked = config.Lookahead;
         checkBoxTaskTray.Checked = config.TaskTray;
         checkBoxAutoPosition.Checked = config.AutoPosition;
@@ -2293,8 +2360,10 @@ class Config
     public int Count { get; set; }
     public bool TopMost { get; set; }
     public bool AutoTrim { get; set; }
+    public bool Contains { get; set; }
     public bool Minimize { get; set; }
     public bool Parallel { get; set; }
+    public bool Ignore { get; set; }
     public bool Lookahead { get; set; }
     public bool TaskTray { get; set; }
     public bool AutoPosition { get; set; }
@@ -2333,8 +2402,10 @@ class Config
         Count = GetIntValue(xml, "count");
         TopMost = GetBoolValue(xml, "topmost");
         AutoTrim = GetBoolValue(xml, "trim");
-        Parallel = GetBoolValue(xml, "parallel");
+        Contains = GetBoolValue(xml, "contains");
         Minimize = GetBoolValue(xml, "minimize");
+        Parallel = GetBoolValue(xml, "parallel");
+        Ignore = GetBoolValue(xml, "ignore");
         Lookahead = GetBoolValue(xml, "lookahead");
         TaskTray = GetBoolValue(xml, "tasktray");
         AutoPosition = GetBoolValue(xml, "position");
@@ -2356,8 +2427,10 @@ class Config
         SetElementValue(xml, "count", Count);
         SetElementValue(xml, "topmost", TopMost);
         SetElementValue(xml, "trim", AutoTrim);
-        SetElementValue(xml, "parallel", Parallel);
+        SetElementValue(xml, "contains", Contains);
         SetElementValue(xml, "minimize", Minimize);
+        SetElementValue(xml, "parallel", Parallel);
+        SetElementValue(xml, "ignore", Ignore);
         SetElementValue(xml, "lookahead", Lookahead);
         SetElementValue(xml, "tasktray", TaskTray);
         SetElementValue(xml, "position", AutoPosition);
@@ -2437,8 +2510,10 @@ class Config
                     new XElement("count", "10"),
                     new XElement("topmost", "False"),
                     new XElement("trim", "False"),
-                    new XElement("parallel", "False"),
+                    new XElement("contains", "False"),
                     new XElement("minimize", "False"),
+                    new XElement("parallel", "False"),
+                    new XElement("ignore", "False"),
                     new XElement("lookahead", "False"),
                     new XElement("tasktray", "False"),
                     new XElement("position", "False"),
@@ -2589,6 +2664,46 @@ class Config
     private void SetElementValue(XElement node, string name, List<Element> items)
     {
         SetElementValue(node, name, string.Empty, items);
+    }
+}
+
+class Explorer
+{
+    [DllImport("shell32.dll")]
+    private static extern int SHParseDisplayName([MarshalAs(UnmanagedType.LPWStr)] string pszName, IntPtr pbc, out IntPtr ppidl, uint sfgaoIn, out uint psfgaoOut);
+    
+    [DllImport("shell32.dll")]
+    private static extern int SHOpenFolderAndSelectItems(IntPtr pidlFolder, uint cidl, [MarshalAs(UnmanagedType.LPArray)] IntPtr[] apidl, uint dwFlags);
+    
+    [DllImport("ole32.dll")]
+    private static extern void CoTaskMemFree(IntPtr pv);
+    
+    public void Open(string path)
+    {
+        var pidlFolder = IntPtr.Zero;
+        var pidlFile = IntPtr.Zero;
+        try
+        {
+            uint psfgaoOut;
+            if(SHParseDisplayName(Path.GetDirectoryName(path), IntPtr.Zero, out pidlFolder, 0, out psfgaoOut) != 0)
+            {
+                throw new Exception("対象フォルダのPIDLの取得に失敗しました。");
+            }
+            if(SHParseDisplayName(path, IntPtr.Zero, out pidlFile, 0, out psfgaoOut) != 0)
+            {
+                throw new Exception("対象ファイルのPIDLの取得に失敗しました。");
+            }
+            IntPtr[] fileArray = { pidlFile };
+            if(SHOpenFolderAndSelectItems(pidlFolder, (uint)fileArray.Length, fileArray, 0) != 0)
+            {
+                throw new Exception("エクスプローラーの起動に失敗しました。");
+            }
+        }
+        finally
+        {
+            CoTaskMemFree(pidlFolder);
+            CoTaskMemFree(pidlFile);
+        }
     }
 }
 
