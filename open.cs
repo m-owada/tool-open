@@ -700,8 +700,7 @@ class MainForm : Form
     private ContextMenuStrip SetListBoxMenu()
     {
         var menu = new ContextMenuStrip();
-        var item = listBox.SelectedItem;
-        var files = ((KeyValuePair<string, List<string>>)item).Value.Distinct();
+        var files = ((KeyValuePair<string, List<string>>)listBox.SelectedItem).Value.Distinct();
         if(files.Count() <= 50)
         {
             foreach(var path in files)
@@ -709,7 +708,7 @@ class MainForm : Form
                 var menuItem = new ToolStripMenuItem();
                 menuItem.Text = path;
                 menuItem.Enabled = true;
-                menuItem.Click += MenuClickListBox;
+                menuItem.MouseDown += MenuClickListBox;
                 menu.Items.Add(menuItem);
             }
         }
@@ -723,27 +722,38 @@ class MainForm : Form
         return menu;
     }
     
-    private void MenuClickListBox(object sender, EventArgs e)
+    private void MenuClickListBox(object sender, MouseEventArgs e)
     {
         var menuItem = (ToolStripMenuItem)sender;
-        if(OpenFile(menuItem.Text))
+        if(e.Button == MouseButtons.Left)
         {
-            WindowAutoMinimized();
+            if(OpenFile(menuItem.Text))
+            {
+                WindowAutoMinimized();
+            }
+        }
+        else
+        {
+            OpenDirectory(menuItem.Text);
         }
     }
     
     private void OpenDirectory()
     {
-        var item = listBox.SelectedItem;
-        var file = ((KeyValuePair<string, List<string>>)item).Value.First();
-        if(File.Exists(file))
+        var file = ((KeyValuePair<string, List<string>>)listBox.SelectedItem).Value.First();
+        OpenDirectory(file);
+    }
+    
+    private void OpenDirectory(string path)
+    {
+        if(File.Exists(path))
         {
             var explorer = new Explorer();
-            explorer.Open(file);
+            explorer.Open(path);
         }
         else
         {
-            MessageBox.Show("ファイル \"" + file + "\" が見つかりません。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show("ファイル \"" + path + "\" が見つかりません。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
     
