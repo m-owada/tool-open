@@ -708,7 +708,7 @@ class MainForm : Form
                 var menuItem = new ToolStripMenuItem();
                 menuItem.Text = path;
                 menuItem.Enabled = true;
-                menuItem.MouseDown += MenuClickListBox;
+                menuItem.Click += MenuClickListBox;
                 menu.Items.Add(menuItem);
             }
         }
@@ -722,19 +722,12 @@ class MainForm : Form
         return menu;
     }
     
-    private void MenuClickListBox(object sender, MouseEventArgs e)
+    private void MenuClickListBox(object sender, EventArgs e)
     {
         var menuItem = (ToolStripMenuItem)sender;
-        if(e.Button == MouseButtons.Left)
+        if(OpenFile(menuItem.Text))
         {
-            if(OpenFile(menuItem.Text))
-            {
-                WindowAutoMinimized();
-            }
-        }
-        else
-        {
-            OpenDirectory(menuItem.Text);
+            WindowAutoMinimized();
         }
     }
     
