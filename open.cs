@@ -14,14 +14,14 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml.Linq;
 
-[assembly: AssemblyVersion("3.2.0.0")]
-[assembly: AssemblyFileVersion ("3.2.0.0")]
-[assembly: AssemblyInformationalVersion("3.2")]
+[assembly: AssemblyVersion("3.3.0.0")]
+[assembly: AssemblyFileVersion ("3.3.0.0")]
+[assembly: AssemblyInformationalVersion("3.3")]
 [assembly: AssemblyTitle("")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyProduct("OPEN")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyCopyright("Copyright (C) 2024 m-owada.")]
+[assembly: AssemblyCopyright("Copyright (C) 2025 m-owada.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -340,6 +340,7 @@ class MainForm : Form
     
     private async Task GetFileList()
     {
+        var keyword = comboBox.Text;
         comboBox.Enabled = false;
         button.Enabled = false;
         listBox.DataSource = null;
@@ -349,11 +350,11 @@ class MainForm : Form
             var items = new Dictionary<string, List<string>>();
             if(lookaheadFiles.Count > 0)
             {
-                items = GetLookaheadFiles(SetWildcard(comboBox.Text));
+                items = GetLookaheadFiles(SetWildcard(keyword));
             }
             else
             {
-                items = GetEnumerateFiles(SetWildcard(comboBox.Text));
+                items = GetEnumerateFiles(SetWildcard(keyword));
             }
             if(items.Count > 0)
             {
@@ -362,7 +363,7 @@ class MainForm : Form
                 listBox.ValueMember = "Value";
                 listBox.DataSource = new BindingSource(items.OrderBy(i => i.Key), null);
                 listBox.EndUpdate();
-                SaveHistory(comboBox.Text);
+                SaveHistory(keyword);
                 SetComboBoxItems();
             }
         });
@@ -382,7 +383,31 @@ class MainForm : Form
         }
         else
         {
-            listBox.Select();
+            var index = 0;
+            var count = 0;
+            for(var i = 0; i < listBox.Items.Count; i++)
+            {
+                if(Path.GetFileNameWithoutExtension(keyword).ToUpper() == Path.GetFileNameWithoutExtension(((KeyValuePair<string, List<string>>)listBox.Items[i]).Key).ToUpper())
+                {
+                    index = i;
+                    count++;
+                    if(count > 1)
+                    {
+                        break;
+                    }
+                }
+            }
+            if(count == 1)
+            {
+                listBox.ClearSelected();
+                listBox.SelectedIndex = index;
+                OpenFiles();
+                comboBox.Select();
+            }
+            else
+            {
+                listBox.Select();
+            }
         }
     }
     
